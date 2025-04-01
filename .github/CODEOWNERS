@@ -1,0 +1,12 @@
+
+# 👥 Global owners
+*       @project-maintainers
+
+# 📱 Frontend code owners
+/client/  @frontend-team
+
+# 🖥️ Backend code owners
+/server/  @backend-team
+
+# 📚 Documentation owners
+/docs/    @docs-team
