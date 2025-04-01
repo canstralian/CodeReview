@@ -4,6 +4,8 @@ import {
   codeIssues, type CodeIssue, type InsertCodeIssue,
   repositoryFiles, type RepositoryFile, type InsertRepositoryFile
 } from "@shared/schema";
+import { db } from "./db";
+import { and, eq } from "drizzle-orm";
 
 // Storage interface with CRUD methods
 export interface IStorage {
@@ -27,98 +29,70 @@ export interface IStorage {
   createRepositoryFile(file: InsertRepositoryFile): Promise<RepositoryFile>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private repositories: Map<number, Repository>;
-  private codeIssues: Map<number, CodeIssue>;
-  private repositoryFiles: Map<number, RepositoryFile>;
-  
-  private userId: number;
-  private repositoryId: number;
-  private codeIssueId: number;
-  private repositoryFileId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.repositories = new Map();
-    this.codeIssues = new Map();
-    this.repositoryFiles = new Map();
-    
-    this.userId = 1;
-    this.repositoryId = 1;
-    this.codeIssueId = 1;
-    this.repositoryFileId = 1;
-  }
-
+// Database storage implementation using Drizzle ORM
+export class DatabaseStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const results = await db.select().from(users).where(eq(users.id, id));
+    return results.length > 0 ? results[0] : undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const results = await db.select().from(users).where(eq(users.username, username));
+    return results.length > 0 ? results[0] : undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    const results = await db.insert(users).values(insertUser).returning();
+    return results[0];
   }
   
   // Repository methods
   async getRepository(id: number): Promise<Repository | undefined> {
-    return this.repositories.get(id);
+    const results = await db.select().from(repositories).where(eq(repositories.id, id));
+    return results.length > 0 ? results[0] : undefined;
   }
   
   async getRepositoryByFullName(fullName: string): Promise<Repository | undefined> {
-    return Array.from(this.repositories.values()).find(
-      (repo) => repo.fullName === fullName,
-    );
+    const results = await db.select().from(repositories).where(eq(repositories.fullName, fullName));
+    return results.length > 0 ? results[0] : undefined;
   }
   
   async createRepository(insertRepository: InsertRepository): Promise<Repository> {
-    const id = this.repositoryId++;
-    const repository: Repository = { ...insertRepository, id };
-    this.repositories.set(id, repository);
-    return repository;
+    const results = await db.insert(repositories).values(insertRepository).returning();
+    return results[0];
   }
   
   // Code Issue methods
   async getIssuesByRepositoryId(repositoryId: number): Promise<CodeIssue[]> {
-    return Array.from(this.codeIssues.values()).filter(
-      (issue) => issue.repositoryId === repositoryId,
-    );
+    return await db.select().from(codeIssues).where(eq(codeIssues.repositoryId, repositoryId));
   }
   
   async createCodeIssue(insertIssue: InsertCodeIssue): Promise<CodeIssue> {
-    const id = this.codeIssueId++;
-    const issue: CodeIssue = { ...insertIssue, id };
-    this.codeIssues.set(id, issue);
-    return issue;
+    const results = await db.insert(codeIssues).values(insertIssue).returning();
+    return results[0];
   }
   
   // Repository File methods
   async getFilesByRepositoryId(repositoryId: number): Promise<RepositoryFile[]> {
-    return Array.from(this.repositoryFiles.values()).filter(
-      (file) => file.repositoryId === repositoryId,
-    );
+    return await db.select().from(repositoryFiles).where(eq(repositoryFiles.repositoryId, repositoryId));
   }
   
   async getFileByPath(repositoryId: number, filePath: string): Promise<RepositoryFile | undefined> {
-    return Array.from(this.repositoryFiles.values()).find(
-      (file) => file.repositoryId === repositoryId && file.filePath === filePath,
+    const results = await db.select().from(repositoryFiles).where(
+      and(
+        eq(repositoryFiles.repositoryId, repositoryId),
+        eq(repositoryFiles.filePath, filePath)
+      )
     );
+    return results.length > 0 ? results[0] : undefined;
   }
   
   async createRepositoryFile(insertFile: InsertRepositoryFile): Promise<RepositoryFile> {
-    const id = this.repositoryFileId++;
-    const file: RepositoryFile = { ...insertFile, id };
-    this.repositoryFiles.set(id, file);
-    return file;
+    const results = await db.insert(repositoryFiles).values(insertFile).returning();
+    return results[0];
   }
 }
 
-export const storage = new MemStorage();
+// Use DatabaseStorage instead of MemStorage
+export const storage = new DatabaseStorage();
