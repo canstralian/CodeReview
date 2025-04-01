@@ -13,7 +13,13 @@ interface RepositoryViewProps {
 }
 
 const RepositoryView: React.FC<RepositoryViewProps> = ({ data }) => {
-  const { repository, files, issues } = data;
+  // Safely destructure data with defaults in case of undefined properties
+  const { 
+    repository = {} as any, 
+    files = [], 
+    issues = [] 
+  } = data || {};
+  
   const [selectedFile, setSelectedFile] = useState<RepositoryFile | null>(null);
   const [fileIssues, setFileIssues] = useState<CodeIssue[]>([]);
   const { toast } = useToast();
@@ -35,6 +41,16 @@ const RepositoryView: React.FC<RepositoryViewProps> = ({ data }) => {
   });
 
   const handleFileSelect = (file: RepositoryFile) => {
+    // Skip if file is invalid or repository name is missing
+    if (!file || !repository || !repository.fullName || !file.filePath) {
+      toast({
+        title: "Error",
+        description: "Invalid file or repository information",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     // Only fetch content for files, not directories
     if (file.type === "file") {
       fileContentMutation.mutate({ 

@@ -18,8 +18,20 @@ export async function getFileWithIssues(repo: string, path: string): Promise<Fil
 }
 
 // Helper function to format date
-export function formatDate(dateString: string): string {
+export function formatDate(dateString?: string): string {
+  // Return "unknown" if dateString is undefined, null, or not a valid string
+  if (!dateString || typeof dateString !== 'string') {
+    return "Unknown";
+  }
+  
+  // Try to create a valid date object
   const date = new Date(dateString);
+  
+  // Check if date is valid
+  if (isNaN(date.getTime())) {
+    return "Unknown";
+  }
+  
   const now = new Date();
   const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
   
@@ -42,11 +54,19 @@ export function formatDate(dateString: string): string {
 }
 
 // Helper function to format numbers
-export function formatNumber(num: number): string {
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + 'M';
-  } else if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'k';
+export function formatNumber(num?: number): string {
+  // Check if num is a valid number
+  if (num === undefined || num === null || isNaN(num)) {
+    return "0";
   }
-  return num.toString();
+  
+  // Make sure num is a number type
+  const numValue = Number(num);
+  
+  if (numValue >= 1000000) {
+    return (numValue / 1000000).toFixed(1) + 'M';
+  } else if (numValue >= 1000) {
+    return (numValue / 1000).toFixed(1) + 'k';
+  }
+  return numValue.toString();
 }

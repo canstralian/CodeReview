@@ -8,21 +8,33 @@ interface CodeViewerProps {
   isLoading: boolean;
 }
 
-const CodeViewer: React.FC<CodeViewerProps> = ({ file, issues, isLoading }) => {
+const CodeViewer: React.FC<CodeViewerProps> = ({ file, issues = [], isLoading }) => {
   const preRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
     // Highlight code using Prism.js when the component mounts or file changes
-    if (file.content && !isLoading && preRef.current) {
+    // First check if file exists and has content
+    if (file && file.content && !isLoading && preRef.current) {
       if ((window as any).Prism) {
         (window as any).Prism.highlightElement(preRef.current);
       }
     }
-  }, [file.content, isLoading]);
+  }, [file, isLoading]);
+
+  // Check if file is valid before proceeding
+  if (!file) {
+    return (
+      <div className="bg-white rounded-lg shadow-md mb-4">
+        <div className="p-4 text-center">
+          <p className="text-gray-500">No file selected</p>
+        </div>
+      </div>
+    );
+  }
 
   // Determine the language class for syntax highlighting
   const getLanguageClass = () => {
-    if (!file.language) return 'language-plaintext';
+    if (!file || !file.language) return 'language-plaintext';
     
     const languageMap: Record<string, string> = {
       'JavaScript': 'language-javascript',
@@ -47,24 +59,39 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ file, issues, isLoading }) => {
 
   // Add line numbers and issue highlights to the code
   const prepareCodeWithIssues = () => {
-    if (!file.content) return '';
+    // Safety check for file content
+    if (!file || !file.content) return '';
     
     const lines = file.content.split('\n');
     let result = '';
     
     lines.forEach((line, index) => {
       const lineNumber = index + 1;
-      const issuesOnLine = issues.filter(i => i.lineNumber === lineNumber);
+      
+      // Safely filter issues, ensuring we have a valid array
+      const issuesOnLine = Array.isArray(issues) 
+        ? issues.filter(i => i && i.lineNumber === lineNumber)
+        : [];
       
       // Add line number
       result += `<span class="text-gray-500">${lineNumber}</span> `;
       
       // Add line with highlighting if there are issues
-      if (issuesOnLine.length > 0) {
+      if (issuesOnLine.length > 0 && issuesOnLine[0] && issuesOnLine[0].issueType) {
         const issueClass = getIssueHighlightClass(issuesOnLine[0].issueType);
-        result += `<span class="${issueClass}">${line}</span>`;
+        // Safely escape line content to prevent XSS
+        const escapedLine = line
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        result += `<span class="${issueClass}">${escapedLine}</span>`;
       } else {
-        result += line;
+        // Safely escape line content to prevent XSS
+        const escapedLine = line
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        result += escapedLine;
       }
       
       // Add line break
@@ -78,6 +105,8 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ file, issues, isLoading }) => {
 
   // Get highlighting class based on issue type
   const getIssueHighlightClass = (issueType: string) => {
+    if (!issueType) return '';
+    
     switch (issueType) {
       case 'bug':
         return 'bg-red-100 p-1 rounded';
@@ -93,7 +122,7 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ file, issues, isLoading }) => {
   return (
     <div className="bg-white rounded-lg shadow-md mb-4">
       <div className="flex items-center border-b px-4 py-2">
-        <span className="text-sm font-medium">{file.filePath}</span>
+        <span className="text-sm font-medium">{file.filePath || 'Unknown file'}</span>
       </div>
       <div className="p-1">
         {isLoading ? (
