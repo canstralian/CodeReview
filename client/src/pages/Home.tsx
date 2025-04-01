@@ -13,14 +13,17 @@ import { useToast } from "@/hooks/use-toast";
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [repositoryData, setRepositoryData] = useState<RepositoryAnalysisResponse | null>(null);
+  const [hasError, setHasError] = useState(false);
   const { toast } = useToast();
 
   const analyzeRepoMutation = useMutation({
     mutationFn: analyzeRepository,
     onSuccess: (data) => {
       setRepositoryData(data);
+      setHasError(false); // Reset error state on success
     },
     onError: (error) => {
+      setHasError(true); // Set error state
       toast({
         title: "Error analyzing repository",
         description: error instanceof Error ? error.message : "Please check the repository URL and try again.",
@@ -34,6 +37,19 @@ export default function Home() {
       toast({
         title: "Empty search query",
         description: "Please enter a GitHub repository URL or search query.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Basic validation for GitHub repository URL format
+    const isGitHubUrl = /github\.com\/[^\/]+\/[^\/]+/i.test(searchQuery);
+    
+    if (!isGitHubUrl) {
+      // If it doesn't look like a GitHub URL, show a more helpful message
+      toast({
+        title: "Invalid GitHub URL format",
+        description: "Please enter a valid GitHub repository URL in the format: https://github.com/owner/repo",
         variant: "destructive",
       });
       return;
@@ -69,7 +85,7 @@ export default function Home() {
           
           {analyzeRepoMutation.isPending && <LoadingState />}
           
-          {!analyzeRepoMutation.isPending && !repositoryData && <EmptyState />}
+          {!analyzeRepoMutation.isPending && !repositoryData && <EmptyState hasError={hasError} />}
           
           {!analyzeRepoMutation.isPending && repositoryData && (
             <RepositoryView data={repositoryData} />

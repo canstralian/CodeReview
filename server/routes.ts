@@ -23,11 +23,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Extract owner and repo name from GitHub URL
       // Format could be: https://github.com/owner/repo or github.com/owner/repo
-      const urlPattern = /github\.com\/([^\/]+)\/([^\/]+)/;
+      const urlPattern = /(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)/i;
       const match = url.match(urlPattern);
       
       if (!match) {
-        return res.status(400).json({ message: "Invalid GitHub repository URL" });
+        return res.status(400).json({ 
+          message: "Invalid GitHub repository URL. Please use a URL like 'https://github.com/owner/repo'" 
+        });
       }
       
       const [, owner, repo] = match;

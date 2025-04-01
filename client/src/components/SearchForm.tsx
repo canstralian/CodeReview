@@ -32,7 +32,7 @@ const SearchForm: React.FC<SearchFormProps> = ({
             </div>
             <input 
               type="text" 
-              placeholder="Enter GitHub repository URL or search keywords"
+              placeholder="Enter GitHub repository URL (e.g., https://github.com/facebook/react)"
               className="w-full py-3 px-4 outline-none rounded-full text-base"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
