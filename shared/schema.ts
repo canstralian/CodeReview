@@ -66,7 +66,8 @@ export const codeIssues = pgTable("code_issues", {
   filePath: text("file_path").notNull(),
   lineNumber: integer("line_number").notNull(),
   issueType: text("issue_type").notNull(), // bug, warning, info
-  severity: text("severity").notNull(),
+  severity: text("severity").notNull(), // high, medium, low
+  category: text("category").default("codeQuality"), // security, performance, codeQuality, accessibility
   message: text("message").notNull(),
   code: text("code").notNull(),
   suggestion: text("suggestion"),

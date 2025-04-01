@@ -39,6 +39,7 @@ export interface CodeIssue {
   lineNumber: number;
   issueType: 'bug' | 'warning' | 'info';
   severity: 'high' | 'medium' | 'low';
+  category?: 'security' | 'performance' | 'codeQuality' | 'accessibility' | string;
   message: string;
   code: string;
   suggestion: string | null;

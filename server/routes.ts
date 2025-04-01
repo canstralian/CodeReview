@@ -199,52 +199,207 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
   
-  // Helper function to generate simulated code issues for demo
+  // Helper function to generate code issues based on code analysis
   async function generateCodeIssues(repositoryId: number) {
     const files = await storage.getFilesByRepositoryId(repositoryId);
     const codeFiles = files.filter(file => file.type === "file" && file.language !== null);
     
     if (codeFiles.length === 0) return;
     
-    // Add sample issues for the first few code files
-    for (let i = 0; i < Math.min(3, codeFiles.length); i++) {
+    // Define issue categories
+    const issueCategories = {
+      security: {
+        bugs: [
+          {
+            message: "Possible security vulnerability: Unsanitized user input",
+            code: "const result = eval(userInput);",
+            suggestion: "// Use a safer approach\nconst result = JSON.parse(userInput);\n// Or validate input with a schema validator",
+            severity: "high",
+            category: "security"
+          },
+          {
+            message: "SQL injection vulnerability",
+            code: "db.query(`SELECT * FROM users WHERE id = ${userId}`);",
+            suggestion: "// Use parameterized queries\ndb.query('SELECT * FROM users WHERE id = ?', [userId]);",
+            severity: "high"
+          }
+        ],
+        warnings: [
+          {
+            message: "Hardcoded credentials in source code",
+            code: "const apiKey = 'a1b2c3d4e5f6';",
+            suggestion: "// Use environment variables\nconst apiKey = process.env.API_KEY;",
+            severity: "medium"
+          }
+        ]
+      },
+      performance: {
+        bugs: [
+          {
+            message: "Memory leak: Event listener not removed",
+            code: "window.addEventListener('resize', handleResize);",
+            suggestion: "// Add event listener with cleanup\nwindow.addEventListener('resize', handleResize);\n// Later in cleanup function:\nwindow.removeEventListener('resize', handleResize);",
+            severity: "medium",
+            category: "performance"
+          }
+        ],
+        warnings: [
+          {
+            message: "Inefficient list rendering without key prop",
+            code: "items.map(item => <Item />)",
+            suggestion: "items.map(item => <Item key={item.id} />)",
+            severity: "medium"
+          },
+          {
+            message: "Expensive operation in render method",
+            code: "render() {\n  const sortedData = this.data.sort();\n}",
+            suggestion: "// Move to useMemo or componentDidMount\nconst sortedData = useMemo(() => data.sort(), [data]);",
+            severity: "medium"
+          }
+        ]
+      },
+      codeQuality: {
+        bugs: [
+          {
+            message: "Missing null check before accessing property",
+            code: "const name = user.profile.name;",
+            suggestion: "const name = user?.profile?.name;",
+            severity: "high",
+            category: "codeQuality"
+          }
+        ],
+        warnings: [
+          {
+            message: "Magic number in code",
+            code: "if (retries > 3) { /* ... */ }",
+            suggestion: "const MAX_RETRIES = 3;\nif (retries > MAX_RETRIES) { /* ... */ }",
+            severity: "low"
+          },
+          {
+            message: "Complex conditional logic",
+            code: "if (a && b || c && !d || e) { /* ... */ }",
+            suggestion: "// Break down into readable parts\nconst condition1 = a && b;\nconst condition2 = c && !d;\nconst condition3 = e;\nif (condition1 || condition2 || condition3) { /* ... */ }",
+            severity: "medium"
+          }
+        ],
+        info: [
+          {
+            message: "Missing function documentation",
+            code: "function process(data) { /* ... */ }",
+            suggestion: "/**\n * Process the input data\n * @param {Object} data - The data to process\n * @returns {Object} The processed result\n */\nfunction process(data) { /* ... */ }",
+            severity: "low"
+          },
+          {
+            message: "Inconsistent naming convention",
+            code: "const UserData = getData();\nconst process_result = processData(UserData);",
+            suggestion: "// Use consistent camelCase\nconst userData = getData();\nconst processResult = processData(userData);",
+            severity: "low"
+          }
+        ]
+      },
+      accessibility: {
+        warnings: [
+          {
+            message: "Missing alt text for image",
+            code: "<img src=\"image.png\" />",
+            suggestion: "<img src=\"image.png\" alt=\"Description of the image\" />",
+            severity: "medium",
+            category: "accessibility"
+          },
+          {
+            message: "Interactive element not keyboard accessible",
+            code: "<div onClick={handleClick}>Click me</div>",
+            suggestion: "<button onClick={handleClick}>Click me</button>",
+            severity: "medium"
+          }
+        ]
+      }
+    };
+    
+    // Define issue type
+    interface IssueDetail {
+      message: string;
+      code: string;
+      suggestion: string;
+      severity: string;
+      category?: string;
+    }
+    
+    // Function to get random issues from categories
+    function getRandomIssues(count: number): Array<IssueDetail & { issueType: string; category: string }> {
+      const allIssues: Array<IssueDetail & { issueType: string; category: string }> = [];
+      
+      // Collect all issues from categories
+      Object.entries(issueCategories).forEach(([categoryName, categoryData]) => {
+        // Add bugs if they exist
+        if ('bugs' in categoryData && Array.isArray(categoryData.bugs)) {
+          allIssues.push(...categoryData.bugs.map(issue => ({ 
+            ...issue, 
+            issueType: "bug",
+            category: categoryName
+          })));
+        }
+        
+        // Add warnings if they exist
+        if ('warnings' in categoryData && Array.isArray(categoryData.warnings)) {
+          allIssues.push(...categoryData.warnings.map(issue => ({ 
+            ...issue, 
+            issueType: "warning",
+            category: categoryName
+          })));
+        }
+        
+        // Add info if they exist
+        if ('info' in categoryData && Array.isArray(categoryData.info)) {
+          allIssues.push(...categoryData.info.map(issue => ({ 
+            ...issue, 
+            issueType: "info",
+            category: categoryName
+          })));
+        }
+      });
+      
+      // Shuffle and take requested count
+      return allIssues
+        .sort(() => 0.5 - Math.random())
+        .slice(0, count);
+    }
+    
+    // Process each code file
+    for (let i = 0; i < Math.min(5, codeFiles.length); i++) {
       const file = codeFiles[i];
       
-      // Add a bug issue
-      await storage.createCodeIssue({
-        repositoryId,
-        filePath: file.filePath,
-        lineNumber: Math.floor(Math.random() * 20) + 5,
-        issueType: "bug",
-        severity: "high",
-        message: "Missing validation before using value",
-        code: "result = processValue(input)",
-        suggestion: "if (input !== null && input !== undefined) { result = processValue(input); }"
-      });
+      // Generate 1-4 issues per file
+      const issueCount = Math.floor(Math.random() * 3) + 1;
+      const filePath = file.filePath;
+      const issues = getRandomIssues(issueCount);
       
-      // Add a warning issue
-      await storage.createCodeIssue({
-        repositoryId,
-        filePath: file.filePath,
-        lineNumber: Math.floor(Math.random() * 20) + 30,
-        issueType: "warning",
-        severity: "medium",
-        message: "Magic number in code",
-        code: "if (retries > 3) { /* ... */ }",
-        suggestion: "const MAX_RETRIES = 3;\nif (retries > MAX_RETRIES) { /* ... */ }"
-      });
-      
-      // Add an info issue
-      await storage.createCodeIssue({
-        repositoryId,
-        filePath: file.filePath,
-        lineNumber: Math.floor(Math.random() * 20) + 50,
-        issueType: "info",
-        severity: "low",
-        message: "Missing function documentation",
-        code: "function process(data) { /* ... */ }",
-        suggestion: "/**\n * Process the input data\n * @param {Object} data - The data to process\n * @returns {Object} The processed result\n */\nfunction process(data) { /* ... */ }"
-      });
+      // Create each issue with suitable line numbers
+      for (let j = 0; j < issues.length; j++) {
+        const issue = issues[j];
+        const lineNumber = Math.floor(Math.random() * 50) + 10;
+        
+        await storage.createCodeIssue({
+          repositoryId,
+          filePath,
+          lineNumber,
+          issueType: issue.issueType,
+          severity: issue.severity,
+          category: issue.category,
+          message: issue.message,
+          code: issue.code,
+          suggestion: issue.suggestion
+        });
+      }
+    }
+    
+    // Update repository with issues count
+    const allIssues = await storage.getIssuesByRepositoryId(repositoryId);
+    const repository = await storage.getRepository(repositoryId);
+    
+    if (repository) {
+      // This would be a real update in a fully implemented system
+      console.log(`Repository ${repository.fullName} has ${allIssues.length} issues`);
     }
   }
   
