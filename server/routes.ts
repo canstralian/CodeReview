@@ -434,6 +434,421 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return languageMap[extension] || null;
   }
 
+  // Get user repositories
+  app.get("/api/repositories", async (req, res) => {
+    try {
+      const { username } = req.query;
+      
+      if (!username || typeof username !== "string") {
+        return res.status(400).json({ message: "GitHub username is required" });
+      }
+      
+      // Fetch user repositories from GitHub API
+      try {
+        const response = await axios.get(`${GITHUB_API_BASE_URL}/users/${username}/repos`, {
+          headers: {
+            Accept: "application/vnd.github.v3+json",
+            "User-Agent": "CodeReview-Tool",
+          },
+        });
+        
+        const repositories = await Promise.all(
+          response.data.map(async (repoData: any) => {
+            // Check if repository exists in our storage
+            let repository = await storage.getRepositoryByFullName(repoData.full_name);
+            
+            if (!repository) {
+              // Create repository in our storage
+              const newRepo = insertRepositorySchema.parse({
+                fullName: repoData.full_name,
+                name: repoData.name,
+                owner: repoData.owner.login,
+                description: repoData.description,
+                url: repoData.html_url,
+                visibility: repoData.private ? "Private" : "Public",
+                stars: repoData.stargazers_count,
+                forks: repoData.forks_count,
+                watchers: repoData.watchers_count,
+                issues: repoData.open_issues_count,
+                pullRequests: 0,
+                language: repoData.language,
+                lastUpdated: new Date(repoData.updated_at),
+                codeQuality: Math.floor(Math.random() * 30) + 70, // Simulated score
+                testCoverage: Math.floor(Math.random() * 40) + 60, // Simulated coverage
+                issuesCount: 0,
+                metaData: { owner: repoData.owner },
+                fileStructure: {}
+              });
+              
+              repository = await storage.createRepository(newRepo);
+            }
+            
+            return repository;
+          })
+        );
+        
+        return res.json({ repositories });
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response) {
+          return res.status(error.response.status).json({ 
+            message: `GitHub API error: ${error.response.data.message || "Unknown error"}` 
+          });
+        }
+        return res.status(500).json({ message: "Failed to fetch user repositories" });
+      }
+    } catch (error) {
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+  
+  // Compare repositories
+  app.post("/api/compare-repositories", async (req, res) => {
+    try {
+      const { repositoryIds } = req.body;
+      
+      if (!repositoryIds || !Array.isArray(repositoryIds) || repositoryIds.length < 2) {
+        return res.status(400).json({ message: "At least two repository IDs are required" });
+      }
+      
+      // Fetch repository data
+      const repositories = await Promise.all(
+        repositoryIds.map(id => storage.getRepository(id))
+      );
+      
+      // Filter out any undefined repositories
+      const validRepositories = repositories.filter(repo => repo !== undefined) as any[];
+      
+      if (validRepositories.length < 2) {
+        return res.status(400).json({ message: "At least two valid repositories are required" });
+      }
+      
+      // Fetch files for each repository
+      const repoFiles = await Promise.all(
+        validRepositories.map(repo => storage.getFilesByRepositoryId(repo.id))
+      );
+      
+      // Combine repository data with files
+      const reposWithFiles = validRepositories.map((repo, index) => ({
+        ...repo,
+        files: repoFiles[index]
+      }));
+      
+      // Find overlaps in files
+      const overlaps = findRepositoryOverlaps(reposWithFiles);
+      
+      // Calculate project overview
+      const projectOverview = calculateProjectOverview(reposWithFiles);
+      
+      return res.json({
+        overlaps,
+        projectOverview
+      });
+    } catch (error) {
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+  
+  // Scan all repositories
+  app.get("/api/scan-repositories", async (req, res) => {
+    try {
+      const { username } = req.query;
+      
+      if (!username || typeof username !== "string") {
+        return res.status(400).json({ message: "GitHub username is required" });
+      }
+      
+      // Fetch user repositories
+      try {
+        const response = await axios.get(`${GITHUB_API_BASE_URL}/users/${username}/repos`, {
+          headers: {
+            Accept: "application/vnd.github.v3+json",
+            "User-Agent": "CodeReview-Tool",
+          },
+        });
+        
+        // Process each repository
+        const repositories = await Promise.all(
+          response.data.map(async (repoData: any) => {
+            // Check if repository exists in our storage
+            let repository = await storage.getRepositoryByFullName(repoData.full_name);
+            
+            if (!repository) {
+              // Create repository in our storage
+              const newRepo = insertRepositorySchema.parse({
+                fullName: repoData.full_name,
+                name: repoData.name,
+                owner: repoData.owner.login,
+                description: repoData.description,
+                url: repoData.html_url,
+                visibility: repoData.private ? "Private" : "Public",
+                stars: repoData.stargazers_count,
+                forks: repoData.forks_count,
+                watchers: repoData.watchers_count,
+                issues: repoData.open_issues_count,
+                pullRequests: 0,
+                language: repoData.language,
+                lastUpdated: new Date(repoData.updated_at),
+                codeQuality: Math.floor(Math.random() * 30) + 70, // Simulated score
+                testCoverage: Math.floor(Math.random() * 40) + 60, // Simulated coverage
+                issuesCount: 0,
+                metaData: { owner: repoData.owner },
+                fileStructure: {}
+              });
+              
+              repository = await storage.createRepository(newRepo);
+              
+              // Fetch repository file structure
+              await fetchRepositoryFiles(repoData.full_name, repository.id);
+              
+              // Generate code issues
+              await generateCodeIssues(repository.id);
+            }
+            
+            return repository;
+          })
+        );
+        
+        // Fetch files for each repository
+        const repoFiles = await Promise.all(
+          repositories.map(repo => storage.getFilesByRepositoryId(repo.id))
+        );
+        
+        // Combine repository data with files
+        const reposWithFiles = repositories.map((repo, index) => ({
+          ...repo,
+          files: repoFiles[index]
+        }));
+        
+        // Find overlaps in files
+        const overlaps = findRepositoryOverlaps(reposWithFiles);
+        
+        // Calculate project overview
+        const projectOverview = calculateProjectOverview(reposWithFiles);
+        
+        return res.json({
+          overlaps,
+          projectOverview
+        });
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response) {
+          return res.status(error.response.status).json({ 
+            message: `GitHub API error: ${error.response.data.message || "Unknown error"}` 
+          });
+        }
+        return res.status(500).json({ message: "Failed to scan repositories" });
+      }
+    } catch (error) {
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+  
+  // Helper function to identify overlaps and similarities between repositories
+  function findRepositoryOverlaps(reposWithFiles: any[]) {
+    const overlaps: any[] = [];
+    
+    // Define minimum similarity threshold
+    const MIN_SIMILARITY = 0.5;
+    
+    // Compare each repository with every other repository
+    for (let i = 0; i < reposWithFiles.length; i++) {
+      for (let j = i + 1; j < reposWithFiles.length; j++) {
+        const repo1 = reposWithFiles[i];
+        const repo2 = reposWithFiles[j];
+        
+        // Skip if repositories don't have files
+        if (!repo1.files || !repo2.files) continue;
+        
+        const similarFiles: any[] = [];
+        
+        // Find similar files between repositories
+        for (const file1 of repo1.files) {
+          for (const file2 of repo2.files) {
+            // Skip if files are not of the same type or language
+            if (file1.type !== 'file' || file2.type !== 'file') continue;
+            if (!file1.language || !file2.language || file1.language !== file2.language) continue;
+            
+            // Calculate similarity based on file path
+            const similarityScore = calculateFileSimilarity(file1, file2);
+            
+            if (similarityScore >= MIN_SIMILARITY) {
+              similarFiles.push({
+                file1: {
+                  repositoryId: file1.repositoryId,
+                  filePath: file1.filePath,
+                  language: file1.language,
+                },
+                file2: {
+                  repositoryId: file2.repositoryId,
+                  filePath: file2.filePath,
+                  language: file2.language,
+                },
+                similarityScore,
+              });
+            }
+          }
+        }
+        
+        // If we found similar files, create an overlap entry
+        if (similarFiles.length > 0) {
+          const description = generateOverlapDescription(repo1, repo2, similarFiles);
+          const mergeRecommendation = generateMergeRecommendation(repo1, repo2, similarFiles);
+          
+          overlaps.push({
+            repositories: [
+              { id: repo1.id, name: repo1.name, fullName: repo1.fullName },
+              { id: repo2.id, name: repo2.name, fullName: repo2.fullName },
+            ],
+            similarFiles,
+            description,
+            mergeRecommendation,
+          });
+        }
+      }
+    }
+    
+    return overlaps;
+  }
+  
+  // Helper function to calculate project overview metrics
+  function calculateProjectOverview(reposWithFiles: any[]) {
+    // Total repositories
+    const totalRepositories = reposWithFiles.length;
+    
+    // Count total files and calculate language distribution
+    let totalFiles = 0;
+    const languageCount: Record<string, number> = {};
+    
+    for (const repo of reposWithFiles) {
+      if (repo.files) {
+        for (const file of repo.files) {
+          if (file.type === 'file') {
+            totalFiles++;
+            
+            if (file.language) {
+              languageCount[file.language] = (languageCount[file.language] || 0) + 1;
+            }
+          }
+        }
+      }
+    }
+    
+    // Calculate duplicate code percentage using overlaps
+    const overlaps = findRepositoryOverlaps(reposWithFiles);
+    let duplicateFileCount = 0;
+    
+    for (const overlap of overlaps) {
+      duplicateFileCount += overlap.similarFiles.length;
+    }
+    
+    const duplicateCodePercentage = totalFiles > 0 ? (duplicateFileCount / totalFiles) * 100 : 0;
+    
+    return {
+      totalRepositories,
+      totalFiles,
+      languageDistribution: languageCount,
+      duplicateCodePercentage,
+    };
+  }
+  
+  // Helper function to calculate similarity between two files
+  function calculateFileSimilarity(file1: any, file2: any) {
+    // Simple similarity based on file names
+    const fileName1 = file1.filePath.split('/').pop() || '';
+    const fileName2 = file2.filePath.split('/').pop() || '';
+    
+    // Use Levenshtein distance for file name similarity
+    const distance = levenshteinDistance(fileName1, fileName2);
+    const maxLength = Math.max(fileName1.length, fileName2.length);
+    
+    // Normalize distance to a similarity score between 0 and 1
+    const nameSimilarity = maxLength > 0 ? 1 - (distance / maxLength) : 0;
+    
+    // Use file path structure for additional similarity
+    const pathParts1 = file1.filePath.split('/');
+    const pathParts2 = file2.filePath.split('/');
+    
+    // Calculate path structure similarity
+    let commonPathParts = 0;
+    for (let i = 0; i < Math.min(pathParts1.length, pathParts2.length); i++) {
+      if (pathParts1[i] === pathParts2[i]) {
+        commonPathParts++;
+      }
+    }
+    
+    const pathSimilarity = Math.min(pathParts1.length, pathParts2.length) > 0 
+      ? commonPathParts / Math.min(pathParts1.length, pathParts2.length) 
+      : 0;
+    
+    // Calculate a combined similarity score (weighted more towards file name)
+    return (nameSimilarity * 0.7) + (pathSimilarity * 0.3);
+  }
+  
+  // Helper function for Levenshtein distance calculation
+  function levenshteinDistance(a: string, b: string) {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+    
+    const matrix = [];
+    
+    // Initialize the matrix
+    for (let i = 0; i <= b.length; i++) {
+      matrix[i] = [i];
+    }
+    
+    for (let j = 0; j <= a.length; j++) {
+      matrix[0][j] = j;
+    }
+    
+    // Calculate the distances
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        if (b.charAt(i - 1) === a.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1, // substitution
+            matrix[i][j - 1] + 1,     // insertion
+            matrix[i - 1][j] + 1      // deletion
+          );
+        }
+      }
+    }
+    
+    return matrix[b.length][a.length];
+  }
+  
+  // Helper function to generate overlap description
+  function generateOverlapDescription(repo1: any, repo2: any, similarFiles: any[]) {
+    const languages = new Set<string>();
+    
+    // Collect unique languages from similar files
+    similarFiles.forEach(item => {
+      if (item.file1.language) {
+        languages.add(item.file1.language);
+      }
+    });
+    
+    const languagesStr = Array.from(languages).join(', ');
+    const filesCount = similarFiles.length;
+    
+    return `Found ${filesCount} similar ${filesCount === 1 ? 'file' : 'files'} between repositories ${repo1.name} and ${repo2.name}. 
+    These repositories share code patterns in ${languagesStr}. There may be opportunities to consolidate functionality.`;
+  }
+  
+  // Helper function to generate merge recommendation
+  function generateMergeRecommendation(repo1: any, repo2: any, similarFiles: any[]) {
+    const totalFiles = similarFiles.length;
+    const averageSimilarity = similarFiles.reduce((sum, item) => sum + item.similarityScore, 0) / totalFiles;
+    
+    if (averageSimilarity > 0.8) {
+      return `High similarity detected. Consider merging ${repo1.name} and ${repo2.name} into a single repository to reduce duplication and maintenance overhead.`;
+    } else if (averageSimilarity > 0.6) {
+      return `Moderate similarity detected. Consider creating shared libraries or modules for common functionality between ${repo1.name} and ${repo2.name}.`;
+    } else {
+      return `Low similarity detected. The common patterns may be coincidental, but review the similar files to identify potential opportunities for code reuse.`;
+    }
+  }
+  
   const httpServer = createServer(app);
   return httpServer;
 }

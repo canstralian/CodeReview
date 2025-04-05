@@ -1,5 +1,10 @@
 import { apiRequest } from "./queryClient";
-import type { RepositoryAnalysisResponse, FileWithIssuesResponse } from "../types";
+import type { 
+  RepositoryAnalysisResponse, 
+  FileWithIssuesResponse, 
+  UserRepositoriesResponse,
+  RepositoryComparisonResponse
+} from "../types";
 
 // Function to get repository analysis
 export async function analyzeRepository(url: string): Promise<RepositoryAnalysisResponse> {
@@ -12,6 +17,36 @@ export async function getFileWithIssues(repo: string, path: string): Promise<Fil
   const response = await apiRequest(
     "GET", 
     `/api/file?repo=${encodeURIComponent(repo)}&path=${encodeURIComponent(path)}`, 
+    undefined
+  );
+  return await response.json();
+}
+
+// Function to get a user's repositories
+export async function getUserRepositories(username: string): Promise<UserRepositoriesResponse> {
+  const response = await apiRequest(
+    "GET",
+    `/api/repositories?username=${encodeURIComponent(username)}`,
+    undefined
+  );
+  return await response.json();
+}
+
+// Function to compare repositories and identify overlaps
+export async function compareRepositories(repositoryIds: number[]): Promise<RepositoryComparisonResponse> {
+  const response = await apiRequest(
+    "POST",
+    `/api/compare-repositories`,
+    { repositoryIds }
+  );
+  return await response.json();
+}
+
+// Function to analyze all user repositories
+export async function scanAllRepositories(username: string): Promise<RepositoryComparisonResponse> {
+  const response = await apiRequest(
+    "GET",
+    `/api/scan-repositories?username=${encodeURIComponent(username)}`,
     undefined
   );
   return await response.json();
