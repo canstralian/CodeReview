@@ -6,10 +6,10 @@ const Footer: React.FC = () => {
     <footer className="py-6 mt-auto text-center text-sm text-gray-500">
       <div className="mb-2">
         <Link href="/">
-          <a className="mx-2 hover:text-[#4285F4]">Single Repository</a>
+          <span className="mx-2 hover:text-[#4285F4] cursor-pointer">Single Repository</span>
         </Link>
         <Link href="/repo-comparison">
-          <a className="mx-2 hover:text-[#4285F4]">Repository Scanner</a>
+          <span className="mx-2 hover:text-[#4285F4] cursor-pointer">Repository Scanner</span>
         </Link>
         <a href="#" className="mx-2 hover:text-[#4285F4]">Documentation</a>
         <a href="#" className="mx-2 hover:text-[#4285F4]">GitHub</a>
