@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { db } from "./db";
 import axios from "axios";
 import { ZodError } from "zod";
 import { insertRepositorySchema, insertCodeIssueSchema, insertRepositoryFileSchema } from "@shared/schema";
@@ -887,6 +888,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
   
+  // Add a database health check endpoint
+  app.get("/api/db-health", async (req, res) => {
+    try {
+      // Test database connection by querying a simple table
+      const result = await storage.getUserByUsername("test-user");
+      
+      // Create a test user if it doesn't exist
+      if (!result) {
+        try {
+          await storage.createUser({
+            username: "test-user",
+            password: "password123"
+          });
+        } catch (err) {
+          console.error("Error creating test user:", err);
+        }
+      }
+      
+      // Check tables
+      const tables = await db.query(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+      );
+      
+      return res.json({
+        status: "Database connection successful",
+        tables: tables.rows.map(row => row.table_name)
+      });
+    } catch (error) {
+      console.error("Database health check error:", error);
+      return res.status(500).json({
+        status: "Database connection failed",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
