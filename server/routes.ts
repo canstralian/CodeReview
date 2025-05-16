@@ -469,11 +469,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Fetch user repositories from GitHub API
       try {
+        const headers: Record<string, string> = {
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "CodeReview-Tool",
+        };
+        
+        // Add authorization header if token exists
+        if (GITHUB_TOKEN) {
+          headers["Authorization"] = `token ${GITHUB_TOKEN}`;
+        }
+        
         const response = await axios.get(`${GITHUB_API_BASE_URL}/users/${username}/repos`, {
-          headers: {
-            Accept: "application/vnd.github.v3+json",
-            "User-Agent": "CodeReview-Tool",
-          },
+          headers,
         });
         
         const repositories = await Promise.all(
@@ -583,11 +590,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Fetch user repositories
       try {
+        const headers: Record<string, string> = {
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "CodeReview-Tool",
+        };
+        
+        // Add authorization header if token exists
+        if (GITHUB_TOKEN) {
+          headers["Authorization"] = `token ${GITHUB_TOKEN}`;
+        }
+        
         const response = await axios.get(`${GITHUB_API_BASE_URL}/users/${username}/repos`, {
-          headers: {
-            Accept: "application/vnd.github.v3+json",
-            "User-Agent": "CodeReview-Tool",
-          },
+          headers,
         });
         
         // Process each repository
