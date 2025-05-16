@@ -9,6 +9,9 @@ import { fromZodError } from "zod-validation-error";
 // GitHub API base URL
 const GITHUB_API_BASE_URL = "https://api.github.com";
 
+// GitHub Authentication token (to increase rate limit)
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // API routes prefix with /api
   
@@ -41,11 +44,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!repository) {
         // Fetch repository data from GitHub API
         try {
-          const response = await axios.get(`${GITHUB_API_BASE_URL}/repos/${fullName}`, {
-            headers: {
+          const headers: Record<string, string> = {
               Accept: "application/vnd.github.v3+json",
               "User-Agent": "CodeReview-Tool",
-            },
+          };
+          
+          // Add authorization header if token exists
+          if (GITHUB_TOKEN) {
+              headers["Authorization"] = `token ${GITHUB_TOKEN}`;
+          }
+          
+          const response = await axios.get(`${GITHUB_API_BASE_URL}/repos/${fullName}`, {
+            headers,
           });
           
           const repoData = response.data;
@@ -134,11 +144,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           // Encode file path for GitHub API
           const encodedPath = encodeURIComponent(path);
-          const response = await axios.get(`${GITHUB_API_BASE_URL}/repos/${repo}/contents/${encodedPath}`, {
-            headers: {
+          const headers: Record<string, string> = {
               Accept: "application/vnd.github.v3.raw",
               "User-Agent": "CodeReview-Tool",
-            },
+          };
+          
+          // Add authorization header if token exists
+          if (GITHUB_TOKEN) {
+              headers["Authorization"] = `token ${GITHUB_TOKEN}`;
+          }
+          
+          const response = await axios.get(`${GITHUB_API_BASE_URL}/repos/${repo}/contents/${encodedPath}`, {
+            headers,
           });
           
           // Update file with content
