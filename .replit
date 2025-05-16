@@ -37,6 +37,15 @@ task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
 
+[[workflows.workflow]]
+name = "Sync to HuggingFace"
+author = 25868489
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "git push https://huggingface.co/spaces/${HF_USERNAME}/${HF_REPO_NAME} main"
+
 [[ports]]
 localPort = 5000
 externalPort = 80
