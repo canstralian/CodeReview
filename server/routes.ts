@@ -189,11 +189,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Helper function to fetch repository files
   async function fetchRepositoryFiles(fullName: string, repositoryId: number) {
     try {
+      const headers: Record<string, string> = {
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "CodeReview-Tool",
+      };
+      
+      // Add authorization header if token exists
+      if (GITHUB_TOKEN) {
+        headers["Authorization"] = `token ${GITHUB_TOKEN}`;
+      }
+      
       const response = await axios.get(`${GITHUB_API_BASE_URL}/repos/${fullName}/contents`, {
-        headers: {
-          Accept: "application/vnd.github.v3+json",
-          "User-Agent": "CodeReview-Tool",
-        },
+        headers,
       });
       
       const files = response.data;
