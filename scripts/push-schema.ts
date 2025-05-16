@@ -1,17 +1,27 @@
-import { db } from "../server/db";
+import pkg from 'pg';
+const { Client } = pkg;
 import * as schema from "../shared/schema";
-import { drizzle } from "drizzle-orm/neon-serverless";
-import { Pool } from "@neondatabase/serverless";
 
 async function main() {
   try {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
+    }
+
     console.log("Starting schema push...");
     
-    // Create tables for our schema
+    // Use the standard pg client instead of Neon's WebSocket client
+    const client = new Client({
+      connectionString: process.env.DATABASE_URL,
+    });
+    
+    await client.connect();
+    console.log("Connected to PostgreSQL database");
+    
     console.log("Creating database schema...");
     
     // Create users table
-    await db.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username TEXT NOT NULL UNIQUE,
@@ -21,7 +31,7 @@ async function main() {
     console.log("Created users table");
     
     // Create repositories table
-    await db.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS repositories (
         id SERIAL PRIMARY KEY,
         full_name TEXT NOT NULL UNIQUE,
@@ -47,7 +57,7 @@ async function main() {
     console.log("Created repositories table");
     
     // Create code_issues table
-    await db.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS code_issues (
         id SERIAL PRIMARY KEY,
         repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
@@ -64,7 +74,7 @@ async function main() {
     console.log("Created code_issues table");
     
     // Create repository_files table
-    await db.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS repository_files (
         id SERIAL PRIMARY KEY,
         repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
@@ -77,6 +87,7 @@ async function main() {
     console.log("Created repository_files table");
     
     console.log("Schema push completed successfully!");
+    await client.end();
     process.exit(0);
   } catch (error) {
     console.error("Error pushing schema:", error);
