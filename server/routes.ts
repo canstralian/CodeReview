@@ -1073,6 +1073,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Fetch user repositories
       try {
+        // Log that we're starting the GitHub API request
+        console.log(`Fetching repositories for GitHub user: ${username}`);
+        console.log(`GitHub Token available: ${GITHUB_TOKEN ? 'Yes' : 'No'}`);
+        
         const headers: Record<string, string> = {
           Accept: "application/vnd.github.v3+json",
           "User-Agent": "CodeReview-Tool",
@@ -1081,9 +1085,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Add authorization header if token exists
         if (GITHUB_TOKEN) {
           headers["Authorization"] = `token ${GITHUB_TOKEN}`;
+          console.log("Authorization header added with token");
+        } else {
+          console.log("No GitHub token available - request will be unauthenticated");
         }
         
-        const response = await axios.get(`${GITHUB_API_BASE_URL}/users/${username}/repos`, {
+        // Log the GitHub API URL we're requesting
+        const githubApiUrl = `${GITHUB_API_BASE_URL}/users/${username}/repos`;
+        console.log(`Requesting GitHub API URL: ${githubApiUrl}`);
+        
+        const response = await axios.get(githubApiUrl, {
           headers,
         });
         
