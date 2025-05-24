@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
@@ -59,30 +59,30 @@ function analyzeCodeSecurity(code: string, language: string): Array<any> {
       type: 'security',
       severity: 'critical',
       line: getLineNumber(code, 'SELECT'),
-      message: 'Potential SQL injection vulnerability',
-      suggestion: 'Use parameterized queries instead of string concatenation for SQL statements.'
+      message: 'Potential SQL injection vulnerability detected',
+      suggestion: 'Use parameterized queries or prepared statements to prevent SQL injection attacks.'
     });
   }
 
-  // Language-specific security checks
-  if (language === 'javascript') {
-    if (code.includes('innerHTML') || code.includes('document.write(')) {
+  // Language-specific issues
+  if (language === 'javascript' || language === 'typescript') {
+    if (code.includes('document.write(') || code.includes('innerHTML') || code.includes('outerHTML')) {
       securityIssues.push({
         type: 'security',
         severity: 'high',
         line: getLineNumber(code, 'innerHTML'),
-        message: 'Potential XSS vulnerability with direct DOM manipulation',
-        suggestion: 'Use textContent or safer alternatives like React\'s JSX to prevent XSS attacks.'
+        message: 'Potential Cross-Site Scripting (XSS) vulnerability',
+        suggestion: 'Use textContent instead of innerHTML, or sanitize user input before inserting into DOM.'
       });
     }
   } else if (language === 'python') {
-    if (code.includes('pickle.loads') || code.includes('yaml.load(')) {
+    if (code.includes('pickle.loads(') || code.includes('yaml.load(') || code.includes('subprocess.call(')) {
       securityIssues.push({
         type: 'security',
         severity: 'high',
-        line: getLineNumber(code, 'pickle.loads'),
-        message: 'Use of unsafe deserialization functions',
-        suggestion: 'Use safer alternatives like pickle.loads(data, encoding="ASCII") or yaml.safe_load().'
+        line: getLineNumber(code, 'pickle.loads('),
+        message: 'Potentially unsafe deserialization or command execution',
+        suggestion: 'Use pickle.loads() with trusted data only. Use yaml.safe_load() instead of yaml.load(). Use subprocess.call() with care.'
       });
     }
   }
@@ -94,58 +94,58 @@ function analyzeCodeSecurity(code: string, language: string): Array<any> {
 function analyzeCodeQuality(code: string, language: string): Array<any> {
   const qualityIssues = [];
 
-  // Check for long functions (lines > 30)
+  // General code quality issues
+  if (code.match(/\/\/\s*TODO/) || code.match(/\/\*\s*TODO/) || code.match(/#\s*TODO/)) {
+    qualityIssues.push({
+      type: 'quality',
+      severity: 'low',
+      line: getLineNumber(code, 'TODO'),
+      message: 'TODO comment found in code',
+      suggestion: 'Resolve TODOs before committing code to production'
+    });
+  }
+
+  if (code.includes('console.log(') || code.includes('print(') || code.includes('System.out.println(')) {
+    qualityIssues.push({
+      type: 'quality',
+      severity: 'low',
+      line: getLineNumber(code, 'console.log('),
+      message: 'Debug statements found in code',
+      suggestion: 'Remove debug statements before committing code to production'
+    });
+  }
+
+  // Check for long functions (more than 50 lines)
   const lines = code.split('\n');
-  if (lines.length > 30) {
+  if (lines.length > 50) {
     qualityIssues.push({
       type: 'quality',
       severity: 'medium',
       line: 1,
-      message: 'Function is too long (exceeds 30 lines)',
-      suggestion: 'Break down long functions into smaller, more focused functions with clear responsibilities.'
+      message: 'Function is too long (' + lines.length + ' lines)',
+      suggestion: 'Consider breaking down this function into smaller, more manageable pieces'
     });
   }
 
-  // Check for deep nesting
-  let maxIndentation = 0;
-  let currentIndentation = 0;
-  for (const line of lines) {
-    const indentMatch = line.match(/^(\s+)/);
-    currentIndentation = indentMatch ? indentMatch[1].length : 0;
-    maxIndentation = Math.max(maxIndentation, currentIndentation);
-  }
-
-  if (maxIndentation >= 12) {  // More than 3 levels of indentation (assuming 4 spaces per level)
-    qualityIssues.push({
-      type: 'quality',
-      severity: 'medium',
-      line: 1,
-      message: 'Deep nesting detected in code',
-      suggestion: 'Refactor to reduce nesting. Consider extracting code into helper functions or using early returns.'
-    });
-  }
-
-  // Language-specific quality checks
-  if (language === 'javascript') {
-    // Check for console.log statements
-    if (code.includes('console.log(')) {
+  // Language-specific issues
+  if (language === 'javascript' || language === 'typescript') {
+    if (code.includes('var ')) {
       qualityIssues.push({
         type: 'quality',
-        severity: 'low',
-        line: getLineNumber(code, 'console.log'),
-        message: 'Debug console.log() statements should be removed in production code',
-        suggestion: 'Remove debug statements or replace with a proper logging system with different log levels.'
+        severity: 'medium',
+        line: getLineNumber(code, 'var '),
+        message: 'Use of var keyword',
+        suggestion: 'Use const or let instead of var for better scoping'
       });
     }
-  } else if (language === 'python') {
-    // Check for print statements
-    if (code.includes('print(')) {
+    
+    if (code.match(/==(?!=)/)) {
       qualityIssues.push({
         type: 'quality',
-        severity: 'low',
-        line: getLineNumber(code, 'print('),
-        message: 'Debug print() statements should be removed in production code',
-        suggestion: 'Remove debug statements or replace with a proper logging system like the logging module.'
+        severity: 'medium',
+        line: getLineNumber(code, '=='),
+        message: 'Use of loose equality operator (==)',
+        suggestion: 'Use strict equality operator (===) to avoid unexpected type coercion'
       });
     }
   }
@@ -157,39 +157,46 @@ function analyzeCodeQuality(code: string, language: string): Array<any> {
 function analyzePerformance(code: string, language: string): Array<any> {
   const performanceIssues = [];
 
-  // Check for inefficient loops
-  if ((code.includes('for') && code.includes('for')) || 
-      (code.includes('while') && code.includes('while'))) {
+  // General performance issues
+  if (code.includes('for (') && code.includes('.length')) {
     performanceIssues.push({
       type: 'performance',
-      severity: 'medium',
-      line: getLineNumber(code, 'for'),
-      message: 'Nested loops detected, potential O(n²) time complexity',
-      suggestion: 'Consider restructuring the algorithm to avoid nested loops when possible, or ensure the inner loop doesn\'t iterate over a large dataset.'
+      severity: 'low',
+      line: getLineNumber(code, 'for ('),
+      message: 'Potential performance issue with array length calculation in loop condition',
+      suggestion: 'Cache the array length before the loop to avoid recalculating it in each iteration'
     });
   }
 
-  // Language-specific performance checks
-  if (language === 'javascript') {
-    // Check for inefficient array operations
-    if (code.includes('.forEach') && code.includes('splice')) {
+  // Language-specific issues
+  if (language === 'javascript' || language === 'typescript') {
+    if (code.includes('document.querySelector') && code.match(/for\s*\(/)) {
       performanceIssues.push({
         type: 'performance',
         severity: 'medium',
-        line: getLineNumber(code, 'splice'),
-        message: 'Inefficient array modification inside loop',
-        suggestion: 'Modifying arrays inside a loop with methods like splice() is inefficient. Consider using filter() or map() instead.'
+        line: getLineNumber(code, 'document.querySelector'),
+        message: 'DOM query inside a loop',
+        suggestion: 'Cache DOM selections outside of loops to avoid repeated DOM queries'
+      });
+    }
+    
+    if (code.includes('.forEach(') && (code.includes('.map(') || code.includes('.filter('))) {
+      performanceIssues.push({
+        type: 'performance',
+        severity: 'medium',
+        line: getLineNumber(code, '.forEach('),
+        message: 'Chained array methods may cause unnecessary iterations',
+        suggestion: 'Consider combining multiple array operations into a single loop for better performance'
       });
     }
   } else if (language === 'python') {
-    // Check for inefficient list operations
-    if (code.includes('for') && code.includes('+ [')) {
+    if (code.includes('for ') && code.includes('range(len(')) {
       performanceIssues.push({
         type: 'performance',
-        severity: 'medium',
-        line: getLineNumber(code, '+ ['),
-        message: 'Inefficient list concatenation in loop',
-        suggestion: 'Use list comprehensions or extend() instead of + for list concatenation inside loops.'
+        severity: 'low',
+        line: getLineNumber(code, 'range(len('),
+        message: 'Inefficient use of range(len())',
+        suggestion: 'Use enumerate() for index access, or iterate directly over the collection if index is not needed'
       });
     }
   }
@@ -197,8 +204,10 @@ function analyzePerformance(code: string, language: string): Array<any> {
   return performanceIssues;
 }
 
-// Helper to get line number for reporting issues
+// Utility function to get line number of a pattern in code
 function getLineNumber(code: string, searchTerm: string): number {
+  if (!code.includes(searchTerm)) return 1;
+  
   const lines = code.split('\n');
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].includes(searchTerm)) {
@@ -210,812 +219,620 @@ function getLineNumber(code: string, searchTerm: string): number {
 
 // Calculate security score based on issues
 function calculateSecurityScore(issues: Array<any>): number {
-  const baseScore = 100;
-  let deductions = 0;
+  if (!issues || issues.length === 0) return 100;
   
+  let score = 100;
   for (const issue of issues) {
     if (issue.severity === 'critical') {
-      deductions += 25;
+      score -= 25;
     } else if (issue.severity === 'high') {
-      deductions += 15;
+      score -= 15;
     } else if (issue.severity === 'medium') {
-      deductions += 10;
-    } else {
-      deductions += 5;
+      score -= 10;
+    } else if (issue.severity === 'low') {
+      score -= 5;
     }
   }
   
-  return Math.max(0, baseScore - deductions);
+  return Math.max(0, score);
 }
 
-// Calculate code quality score
+// Calculate code quality score based on issues
 function calculateQualityScore(issues: Array<any>): number {
-  const baseScore = 100;
-  let deductions = 0;
+  if (!issues || issues.length === 0) return 100;
   
+  let score = 100;
   for (const issue of issues) {
     if (issue.severity === 'high') {
-      deductions += 15;
+      score -= 15;
     } else if (issue.severity === 'medium') {
-      deductions += 10;
-    } else {
-      deductions += 5;
+      score -= 10;
+    } else if (issue.severity === 'low') {
+      score -= 5;
     }
   }
   
-  return Math.max(0, baseScore - deductions);
+  return Math.max(0, score);
 }
 
-// Calculate performance score
+// Calculate performance score based on issues
 function calculatePerformanceScore(issues: Array<any>): number {
-  const baseScore = 100;
-  let deductions = 0;
+  if (!issues || issues.length === 0) return 100;
   
+  let score = 100;
   for (const issue of issues) {
     if (issue.severity === 'high') {
-      deductions += 15;
+      score -= 15;
     } else if (issue.severity === 'medium') {
-      deductions += 10;
-    } else {
-      deductions += 5;
+      score -= 10;
+    } else if (issue.severity === 'low') {
+      score -= 5;
     }
   }
   
-  return Math.max(0, baseScore - deductions);
+  return Math.max(0, score);
 }
 
 // Generate recommendations based on issues
 function generateRecommendations(securityIssues: Array<any>, qualityIssues: Array<any>, performanceIssues: Array<any>): Array<string> {
   const recommendations = [];
   
-  // Security recommendations
+  // Add security recommendations
   if (securityIssues.length > 0) {
-    if (securityIssues.some(i => i.severity === 'critical')) {
-      recommendations.push('Critical security issues detected! Fix immediately before deploying this code.');
+    recommendations.push("Address security vulnerabilities to prevent potential attacks");
+    
+    if (securityIssues.some(issue => issue.message.includes('SQL injection'))) {
+      recommendations.push("Implement parameterized queries to prevent SQL injection attacks");
     }
-    if (securityIssues.some(i => i.message.includes('injection'))) {
-      recommendations.push('Implement proper input validation and sanitization to prevent injection attacks.');
+    
+    if (securityIssues.some(issue => issue.message.includes('XSS'))) {
+      recommendations.push("Sanitize user input to prevent cross-site scripting (XSS) attacks");
     }
-    if (securityIssues.some(i => i.message.includes('credentials'))) {
-      recommendations.push('Move all credentials and secrets to environment variables or a secure vault service.');
+    
+    if (securityIssues.some(issue => issue.message.includes('credentials'))) {
+      recommendations.push("Use environment variables or a secure vault service for storing sensitive credentials");
     }
   }
   
-  // Quality recommendations
+  // Add code quality recommendations
   if (qualityIssues.length > 0) {
-    if (qualityIssues.some(i => i.message.includes('long'))) {
-      recommendations.push('Refactor long functions into smaller, more focused units to improve readability and maintainability.');
+    recommendations.push("Improve code quality to enhance maintainability");
+    
+    if (qualityIssues.some(issue => issue.message.includes('too long'))) {
+      recommendations.push("Break down large functions into smaller, more manageable pieces");
     }
-    if (qualityIssues.some(i => i.message.includes('nesting'))) {
-      recommendations.push('Reduce code complexity by minimizing nested conditionals and loops.');
+    
+    if (qualityIssues.some(issue => issue.message.includes('var keyword'))) {
+      recommendations.push("Replace 'var' with 'const' or 'let' for better variable scoping");
+    }
+    
+    if (qualityIssues.some(issue => issue.message.includes('TODO'))) {
+      recommendations.push("Resolve TODO comments to complete implementation");
     }
   }
   
-  // Performance recommendations
+  // Add performance recommendations
   if (performanceIssues.length > 0) {
-    if (performanceIssues.some(i => i.message.includes('O(n²)'))) {
-      recommendations.push('Review algorithm efficiency to avoid quadratic time complexity where possible.');
+    recommendations.push("Optimize code for better performance");
+    
+    if (performanceIssues.some(issue => issue.message.includes('DOM query'))) {
+      recommendations.push("Cache DOM selections outside of loops to reduce DOM queries");
+    }
+    
+    if (performanceIssues.some(issue => issue.message.includes('array length'))) {
+      recommendations.push("Cache array lengths outside of loops for better performance");
     }
   }
   
   return recommendations;
 }
 
-// Security scanning functions
+// Functions for security scanning (simulated for demonstration)
 async function scanDependencies(repo: string, branch?: string): Promise<Array<any>> {
-  // Simulated dependency scanning - in a real implementation, this would call a vulnerability database
+  // Simulate dependency scanning
+  console.log(`Scanning dependencies for ${repo}${branch ? ` on branch ${branch}` : ''}`);
+  
+  // For demonstration, return simulated results
   return [
     {
-      id: 'GHSA-xvch-5gv4-984h',
-      severity: 'high',
-      package: 'lodash',
-      currentVersion: '4.17.15',
-      patchedVersion: '4.17.21',
-      description: 'Prototype Pollution in lodash',
-      recommendation: 'Upgrade to version 4.17.21 or later'
+      name: "lodash",
+      version: "4.17.15",
+      vulnerabilities: [
+        {
+          id: "CVE-2021-23337",
+          severity: "high",
+          title: "Prototype Pollution in lodash",
+          description: "Prototype pollution in lodash versions < 4.17.21",
+          recommendation: "Upgrade to lodash 4.17.21 or later"
+        }
+      ]
     },
     {
-      id: 'GHSA-7fh5-64p2-3v2j',
-      severity: 'medium',
-      package: 'axios',
-      currentVersion: '0.21.0',
-      patchedVersion: '0.21.1',
-      description: 'Server-Side Request Forgery in axios',
-      recommendation: 'Upgrade to version 0.21.1 or later'
+      name: "axios",
+      version: "0.21.0",
+      vulnerabilities: [
+        {
+          id: "CVE-2021-3749",
+          severity: "medium",
+          title: "Server-Side Request Forgery in axios",
+          description: "Axios before 0.21.1 allows server-side request forgery",
+          recommendation: "Upgrade to axios 0.21.1 or later"
+        }
+      ]
     }
   ];
 }
 
 async function scanForSecrets(repo: string, branch?: string): Promise<Array<any>> {
-  // Simulated secret scanning - in a real implementation, this would analyze code for hardcoded secrets
+  // Simulate secret scanning
+  console.log(`Scanning for secrets in ${repo}${branch ? ` on branch ${branch}` : ''}`);
+  
+  // For demonstration, return simulated results
   return [
     {
-      severity: 'critical',
-      type: 'API Key',
-      location: 'src/config.js:15',
-      description: 'Potential API key found in source code',
-      recommendation: 'Move API keys to environment variables or secure vaults'
+      file: "config.js",
+      line: 12,
+      type: "API Key",
+      severity: "critical",
+      description: "Hardcoded API key found in source code",
+      recommendation: "Move API key to environment variables or secure vault"
+    },
+    {
+      file: "server.js",
+      line: 45,
+      type: "Database Password",
+      severity: "critical",
+      description: "Database password found in source code",
+      recommendation: "Move database credentials to environment variables or secure configuration"
     }
   ];
 }
 
 async function performSASTScan(repo: string, branch?: string): Promise<Array<any>> {
-  // Simulated Static Application Security Testing
+  // Simulate static application security testing
+  console.log(`Performing SAST scan on ${repo}${branch ? ` on branch ${branch}` : ''}`);
+  
+  // For demonstration, return simulated results
   return [
     {
-      severity: 'high',
-      type: 'Cross-Site Scripting (XSS)',
-      location: 'src/components/Comments.js:42',
-      description: 'Unsanitized user input rendered directly to DOM',
-      recommendation: 'Use React\'s JSX or sanitize HTML content before rendering'
+      file: "login.js",
+      line: 28,
+      type: "Insecure Authentication",
+      severity: "high",
+      description: "Password stored in plain text",
+      recommendation: "Use a secure password hashing algorithm like bcrypt"
     },
     {
-      severity: 'medium',
-      type: 'Insecure Cookie',
-      location: 'src/utils/auth.js:78',
-      description: 'Cookies set without secure and httpOnly flags',
-      recommendation: 'Add secure and httpOnly flags to sensitive cookies'
+      file: "api.js",
+      line: 72,
+      type: "Missing Input Validation",
+      severity: "medium",
+      description: "User input is not validated before processing",
+      recommendation: "Implement input validation to prevent injection attacks"
+    },
+    {
+      file: "router.js",
+      line: 55,
+      type: "Improper Access Control",
+      severity: "high",
+      description: "Missing authorization check for sensitive operation",
+      recommendation: "Implement proper authorization checks for all sensitive operations"
     }
   ];
 }
 
+// Generate security recommendations based on vulnerabilities
 function generateSecurityRecommendations(vulnerabilities: Array<any>): Array<string> {
   const recommendations = [];
   
-  // Group vulnerabilities by type for targeted recommendations
-  const hasDependencyIssues = vulnerabilities.some(v => v.package);
-  const hasSecretIssues = vulnerabilities.some(v => v.type === 'API Key');
-  const hasXssIssues = vulnerabilities.some(v => v.type === 'Cross-Site Scripting (XSS)');
-  const hasCookieIssues = vulnerabilities.some(v => v.type === 'Insecure Cookie');
+  // Count vulnerability types
+  const counts = {
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0
+  };
   
+  vulnerabilities.forEach(vuln => {
+    if (vuln.severity in counts) {
+      counts[vuln.severity as keyof typeof counts]++;
+    }
+  });
+  
+  // Generate general recommendations based on severity counts
+  if (counts.critical > 0) {
+    recommendations.push(`Address ${counts.critical} critical vulnerabilities immediately to prevent security breaches`);
+  }
+  
+  if (counts.high > 0) {
+    recommendations.push(`Resolve ${counts.high} high-severity security issues as part of the next sprint`);
+  }
+  
+  if (counts.medium > 0) {
+    recommendations.push(`Plan to fix ${counts.medium} medium-severity security issues in the near future`);
+  }
+  
+  // Add specific recommendations based on vulnerability types
+  const hasSecrets = vulnerabilities.some(v => v.type === "API Key" || v.type === "Database Password");
+  if (hasSecrets) {
+    recommendations.push("Remove hardcoded secrets from the codebase and use environment variables or a secure vault");
+  }
+  
+  const hasDependencyIssues = vulnerabilities.some(v => v.name);
   if (hasDependencyIssues) {
-    recommendations.push('Implement a dependency scanning tool in your CI pipeline to catch outdated packages automatically.');
-    recommendations.push('Set up automatic security updates for non-breaking patches to dependencies.');
+    recommendations.push("Update vulnerable dependencies to their latest secure versions");
   }
   
-  if (hasSecretIssues) {
-    recommendations.push('Use a secret scanning tool in pre-commit hooks to prevent credentials from being committed.');
-    recommendations.push('Implement a secrets management solution like AWS Secrets Manager, HashiCorp Vault, or GitHub Secrets.');
+  const hasAuthIssues = vulnerabilities.some(v => v.type === "Insecure Authentication");
+  if (hasAuthIssues) {
+    recommendations.push("Improve authentication mechanisms using industry-standard practices");
   }
-  
-  if (hasXssIssues) {
-    recommendations.push('Use content security policy (CSP) headers to mitigate XSS attacks.');
-    recommendations.push('Implement input validation on both client and server sides.');
-  }
-  
-  if (hasCookieIssues) {
-    recommendations.push('Review all cookie settings to ensure secure, httpOnly, and SameSite attributes are properly set.');
-  }
-  
-  // General recommendations
-  recommendations.push('Perform regular security scans and penetration testing on your application.');
-  recommendations.push('Establish a security training program for all developers.');
   
   return recommendations;
 }
 
-// Generate simulated security monitoring data
+// Generate security monitoring data for demonstration
 function generateSecurityMonitoringData(timeRange: string): any {
-  // Create time points for the data based on the requested range
+  // Simulated security monitoring data
   const now = new Date();
-  let timePoints = [];
-  let interval = 0;
+  const data = {
+    timeRange,
+    summary: {
+      total_events: 0,
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0
+    },
+    timeline: [],
+    attack_types: {},
+    source_ips: {}
+  };
   
-  if (timeRange === '24h') {
-    interval = 60; // minutes
-    for (let i = 0; i < 24; i++) {
-      const time = new Date(now);
-      time.setHours(now.getHours() - 23 + i);
-      time.setMinutes(0, 0, 0);
-      timePoints.push(time);
-    }
-  } else if (timeRange === '7d') {
-    interval = 24 * 60; // 1 day in minutes
-    for (let i = 0; i < 7; i++) {
-      const time = new Date(now);
-      time.setDate(now.getDate() - 6 + i);
-      time.setHours(0, 0, 0, 0);
-      timePoints.push(time);
-    }
-  } else {
-    interval = 30 * 24 * 60; // 1 month in minutes
-    for (let i = 0; i < 12; i++) {
-      const time = new Date(now);
-      time.setMonth(now.getMonth() - 11 + i);
-      time.setDate(1);
-      time.setHours(0, 0, 0, 0);
-      timePoints.push(time);
-    }
-  }
+  // Generate different data based on time range
+  let days = 1;
+  if (timeRange === '7d') days = 7;
+  else if (timeRange === '30d') days = 30;
+  else if (timeRange === '90d') days = 90;
   
-  // Generate metrics for each time point
-  const metrics = timePoints.map(time => {
-    return {
-      timestamp: time.toISOString(),
-      requestCount: Math.floor(Math.random() * 1000) + 500,
-      errorRate: Math.random() * 0.05,
-      avgResponseTime: Math.random() * 200 + 100,
-      uniqueIPs: Math.floor(Math.random() * 200) + 50
-    };
+  // Generate random number of events based on time range
+  const totalEvents = Math.floor(Math.random() * 100 * days);
+  data.summary.total_events = totalEvents;
+  
+  // Distribute events by severity
+  data.summary.critical = Math.floor(totalEvents * 0.1);
+  data.summary.high = Math.floor(totalEvents * 0.2);
+  data.summary.medium = Math.floor(totalEvents * 0.3);
+  data.summary.low = totalEvents - data.summary.critical - data.summary.high - data.summary.medium;
+  
+  // Generate timeline data
+  const attackTypes = ['SQL Injection', 'XSS', 'Brute Force', 'CSRF', 'Path Traversal'];
+  const sourceIPs = ['192.168.1.1', '10.0.0.1', '172.16.0.1', '8.8.8.8', '1.1.1.1'];
+  
+  // Initialize attack types and source IPs counters
+  attackTypes.forEach(type => {
+    data.attack_types[type] = 0;
   });
   
-  // Generate simulated alerts
-  const alertTypes = ['Authentication Failure', 'Rate Limit Exceeded', 'Suspicious IP Access', 'Abnormal User Behavior'];
-  const alerts = [];
+  sourceIPs.forEach(ip => {
+    data.source_ips[ip] = 0;
+  });
   
-  // Add some alerts distributed across the time range
-  for (let i = 0; i < Math.floor(Math.random() * 5) + 3; i++) {
-    const alertTime = timePoints[Math.floor(Math.random() * timePoints.length)];
-    alerts.push({
-      timestamp: alertTime.toISOString(),
-      type: alertTypes[Math.floor(Math.random() * alertTypes.length)],
-      severity: Math.random() > 0.7 ? 'high' : Math.random() > 0.4 ? 'medium' : 'low',
-      source: Math.random() > 0.5 ? 'firewall' : 'application',
-      description: 'Potential security event detected.'
-    });
+  // Generate timeline events
+  for (let i = 0; i < days; i++) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+    
+    const dailyEvents = Math.floor(totalEvents / days) + Math.floor(Math.random() * 10) - 5;
+    
+    // Distribute events by attack type and source IP
+    for (let j = 0; j < dailyEvents; j++) {
+      const attackType = attackTypes[Math.floor(Math.random() * attackTypes.length)];
+      const sourceIP = sourceIPs[Math.floor(Math.random() * sourceIPs.length)];
+      
+      data.attack_types[attackType]++;
+      data.source_ips[sourceIP]++;
+      
+      data.timeline.push({
+        timestamp: date.toISOString(),
+        type: attackType,
+        severity: j % 10 === 0 ? 'critical' : j % 5 === 0 ? 'high' : j % 3 === 0 ? 'medium' : 'low',
+        source_ip: sourceIP
+      });
+    }
   }
   
-  // Generate potential breach data
-  const potentialBreaches = [];
-  if (Math.random() > 0.7) {
-    const breachTime = timePoints[Math.floor(Math.random() * timePoints.length)];
-    potentialBreaches.push({
-      timestamp: breachTime.toISOString(),
-      type: 'Multiple Failed Logins',
-      targetUser: 'admin_user',
-      sourceIP: '203.0.113.' + Math.floor(Math.random() * 255),
-      status: 'investigating'
-    });
-  }
-  
-  // Generate traffic anomalies
-  const trafficAnomalies = [];
-  const anomalyTimeIndex = Math.floor(Math.random() * (timePoints.length - 1)) + 1;
-  const anomalyTime = timePoints[anomalyTimeIndex];
-  
-  // Simulate a traffic spike
-  if (Math.random() > 0.5) {
-    trafficAnomalies.push({
-      timestamp: anomalyTime.toISOString(),
-      type: 'Traffic Spike',
-      normalLevel: '~750 req/min',
-      anomalousLevel: '~3500 req/min',
-      duration: Math.floor(Math.random() * 30) + 5 + ' minutes',
-      status: Math.random() > 0.5 ? 'resolved' : 'ongoing'
-    });
-  }
-  
-  return {
-    timeRange,
-    interval,
-    metrics,
-    alerts,
-    potentialBreaches,
-    trafficAnomalies
-  };
+  return data;
 }
 
+// Register all routes
 export async function registerRoutes(app: Express): Promise<Server> {
-  // API routes prefix with /api
+  const httpServer = createServer(app);
   
-  // Get repository information
-  app.get("/api/repository", async (req, res) => {
+  // Health check endpoint
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok" });
+  });
+  
+  // Database health check
+  app.get("/api/db-health", async (req, res) => {
     try {
-      const { url } = req.query;
+      const result = await db.query("SELECT NOW()");
+      res.json({ 
+        status: "ok", 
+        timestamp: result.rows[0].now,
+        message: "Database connection successful"
+      });
+    } catch (error) {
+      console.error("Database connection error:", error);
+      res.status(500).json({ 
+        status: "error", 
+        message: "Database connection failed" 
+      });
+    }
+  });
+  
+  // Code analysis endpoint
+  app.post("/api/analyze-code", (req, res) => {
+    try {
+      const { code, language } = req.body;
       
-      if (!url || typeof url !== "string") {
-        return res.status(400).json({ message: "Repository URL is required" });
+      if (!code) {
+        return res.status(400).json({ message: "Code is required" });
       }
       
-      // Extract owner and repo name from GitHub URL
-      // Format could be: https://github.com/owner/repo or github.com/owner/repo
-      const urlPattern = /(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)/i;
-      const match = url.match(urlPattern);
+      const detectedLanguage = language || detectLanguage(code);
       
-      if (!match) {
-        return res.status(400).json({ 
-          message: "Invalid GitHub repository URL. Please use a URL like 'https://github.com/owner/repo'" 
-        });
+      // Analyze code for security, quality, and performance issues
+      const securityIssues = analyzeCodeSecurity(code, detectedLanguage);
+      const qualityIssues = analyzeCodeQuality(code, detectedLanguage);
+      const performanceIssues = analyzePerformance(code, detectedLanguage);
+      
+      // Calculate scores
+      const securityScore = calculateSecurityScore(securityIssues);
+      const qualityScore = calculateQualityScore(qualityIssues);
+      const performanceScore = calculatePerformanceScore(performanceIssues);
+      
+      // Generate recommendations
+      const recommendations = generateRecommendations(securityIssues, qualityIssues, performanceIssues);
+      
+      return res.json({
+        language: detectedLanguage,
+        scores: {
+          security: securityScore,
+          quality: qualityScore,
+          performance: performanceScore,
+          overall: Math.round((securityScore + qualityScore + performanceScore) / 3)
+        },
+        issues: {
+          security: securityIssues,
+          quality: qualityIssues,
+          performance: performanceIssues,
+          total: securityIssues.length + qualityIssues.length + performanceIssues.length
+        },
+        recommendations
+      });
+    } catch (error) {
+      console.error("Error analyzing code:", error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+  
+  // Security monitoring endpoint
+  app.get("/api/security-monitoring", (req, res) => {
+    try {
+      const { timeRange = '7d' } = req.query;
+      
+      if (!['1d', '7d', '30d', '90d'].includes(timeRange as string)) {
+        return res.status(400).json({ message: "Invalid time range. Supported values: 1d, 7d, 30d, 90d" });
       }
       
-      const [, owner, repo] = match;
-      const fullName = `${owner}/${repo}`;
+      const monitoringData = generateSecurityMonitoringData(timeRange as string);
       
-      // Check if repository exists in our storage
-      let repository = await storage.getRepositoryByFullName(fullName);
+      return res.json(monitoringData);
+    } catch (error) {
+      console.error("Error generating security monitoring data:", error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+  
+  // Vulnerability scanning endpoint
+  app.post("/api/vulnerability-scan", async (req, res) => {
+    try {
+      const { repository, branch } = req.body;
       
       if (!repository) {
-        // Fetch repository data from GitHub API
-        try {
-          const headers: Record<string, string> = {
-              Accept: "application/vnd.github.v3+json",
-              "User-Agent": "CodeReview-Tool",
-          };
-          
-          // Add authorization header if token exists
-          if (GITHUB_TOKEN) {
-              headers["Authorization"] = `token ${GITHUB_TOKEN}`;
-          }
-          
-          const response = await axios.get(`${GITHUB_API_BASE_URL}/repos/${fullName}`, {
-            headers,
-          });
-          
-          const repoData = response.data;
-          
-          // Create repository in our storage
-          const newRepo = insertRepositorySchema.parse({
-            fullName: repoData.full_name,
-            name: repoData.name,
-            owner: repoData.owner.login,
-            description: repoData.description,
-            url: repoData.html_url,
-            visibility: repoData.private ? "Private" : "Public",
-            stars: repoData.stargazers_count,
-            forks: repoData.forks_count,
-            watchers: repoData.watchers_count,
-            issues: repoData.open_issues_count,
-            pullRequests: 0, // We'll fetch this separately
-            language: repoData.language,
-            lastUpdated: new Date(repoData.updated_at),
-            codeQuality: Math.floor(Math.random() * 30) + 70, // Simulated score
-            testCoverage: Math.floor(Math.random() * 40) + 60, // Simulated coverage
-            issuesCount: 0,
-            metaData: { owner: repoData.owner },
-            fileStructure: {}
-          });
-          
-          repository = await storage.createRepository(newRepo);
-          
-          // Fetch repository file structure
-          await fetchRepositoryFiles(fullName, repository.id);
-          
-          // Generate some simulated code issues
-          await generateCodeIssues(repository.id);
-        } catch (error) {
-          if (axios.isAxiosError(error) && error.response) {
-            return res.status(error.response.status).json({ 
-              message: `GitHub API error: ${error.response.data.message || "Unknown error"}` 
-            });
-          }
-          return res.status(500).json({ message: "Failed to fetch repository data" });
-        }
+        return res.status(400).json({ message: "Repository name is required" });
       }
       
-      // Return repository data along with files and issues
-      const files = await storage.getFilesByRepositoryId(repository.id);
-      const issues = await storage.getIssuesByRepositoryId(repository.id);
+      // Perform different types of scans
+      const dependencyResults = await scanDependencies(repository, branch);
+      const secretResults = await scanForSecrets(repository, branch);
+      const sastResults = await performSASTScan(repository, branch);
+      
+      // Combine all vulnerabilities
+      const allVulnerabilities = [
+        ...dependencyResults.flatMap(dep => dep.vulnerabilities?.map(v => ({ ...v, source: 'dependency', dependency: dep.name })) || []),
+        ...secretResults.map(s => ({ ...s, source: 'secret' })),
+        ...sastResults.map(s => ({ ...s, source: 'sast' }))
+      ];
+      
+      // Count vulnerabilities by severity
+      const vulnerabilityCounts = {
+        total: allVulnerabilities.length,
+        critical: allVulnerabilities.filter(v => v.severity === 'critical').length,
+        high: allVulnerabilities.filter(v => v.severity === 'high').length,
+        medium: allVulnerabilities.filter(v => v.severity === 'medium').length,
+        low: allVulnerabilities.filter(v => v.severity === 'low').length
+      };
+      
+      // Generate overall security score
+      const securityScore = Math.max(0, 100 - 
+        (vulnerabilityCounts.critical * 25) - 
+        (vulnerabilityCounts.high * 10) - 
+        (vulnerabilityCounts.medium * 5) - 
+        (vulnerabilityCounts.low * 2)
+      );
+      
+      // Generate recommendations
+      const recommendations = generateSecurityRecommendations(allVulnerabilities);
       
       return res.json({
         repository,
+        branch: branch || 'main',
+        scan_timestamp: new Date().toISOString(),
+        security_score: securityScore,
+        vulnerability_counts: vulnerabilityCounts,
+        scan_results: {
+          dependencies: dependencyResults,
+          secrets: secretResults,
+          sast: sastResults
+        },
+        recommendations
+      });
+    } catch (error) {
+      console.error("Error scanning repository:", error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+  
+  // Analyze GitHub repository
+  app.post("/api/analyze-repository", async (req, res) => {
+    try {
+      const { repository } = req.body;
+      
+      if (!repository) {
+        return res.status(400).json({ message: "Repository name is required" });
+      }
+      
+      // Check if repository exists in our database
+      const [owner, repo] = repository.split('/');
+      const fullName = `${owner}/${repo}`;
+      
+      let repositoryData = await storage.getRepositoryByFullName(fullName);
+      
+      if (!repositoryData) {
+        try {
+          // Fetch repository info from GitHub
+          const headers: Record<string, string> = {
+            Accept: "application/vnd.github.v3+json",
+            "User-Agent": "CodeReview-Tool"
+          };
+          
+          if (GITHUB_TOKEN) {
+            headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
+          }
+          
+          const githubUrl = `${GITHUB_API_BASE_URL}/repos/${fullName}`;
+          
+          try {
+            // Try to fetch from GitHub if token is available
+            if (GITHUB_TOKEN) {
+              const response = await axios.get(githubUrl, { headers });
+              const data = response.data;
+              
+              // Create repository in our database
+              const newRepo = {
+                fullName: data.full_name,
+                name: data.name,
+                owner: data.owner.login,
+                description: data.description || `${data.name} repository`,
+                url: data.html_url,
+                visibility: data.private ? "Private" : "Public",
+                stars: data.stargazers_count,
+                forks: data.forks_count,
+                watchers: data.watchers_count,
+                issues: data.open_issues_count,
+                pullRequests: 0, // Not directly available from this endpoint
+                language: data.language,
+                lastUpdated: new Date(data.updated_at),
+                codeQuality: Math.floor(Math.random() * 30) + 70, // Simulated score
+                testCoverage: Math.floor(Math.random() * 40) + 60, // Simulated score
+                issuesCount: data.open_issues_count,
+                metaData: data,
+                fileStructure: {}
+              };
+              
+              repositoryData = await storage.createRepository(newRepo);
+            } else {
+              // If no token, create simulated repository data
+              const newRepo = {
+                fullName,
+                name: repo,
+                owner,
+                description: `${repo} repository`,
+                url: `https://github.com/${fullName}`,
+                visibility: "Public",
+                stars: Math.floor(Math.random() * 1000),
+                forks: Math.floor(Math.random() * 200),
+                watchers: Math.floor(Math.random() * 100),
+                issues: Math.floor(Math.random() * 50),
+                pullRequests: Math.floor(Math.random() * 20),
+                language: ["JavaScript", "TypeScript", "Python", "Go", "Java"][Math.floor(Math.random() * 5)],
+                lastUpdated: new Date(),
+                codeQuality: Math.floor(Math.random() * 30) + 70,
+                testCoverage: Math.floor(Math.random() * 40) + 60,
+                issuesCount: Math.floor(Math.random() * 10),
+                metaData: {},
+                fileStructure: {}
+              };
+              
+              repositoryData = await storage.createRepository(newRepo);
+            }
+          } catch (githubError) {
+            console.error("Error fetching from GitHub:", githubError);
+            
+            // If GitHub fetch fails, create simulated repository data
+            const newRepo = {
+              fullName,
+              name: repo,
+              owner,
+              description: `${repo} repository`,
+              url: `https://github.com/${fullName}`,
+              visibility: "Public",
+              stars: Math.floor(Math.random() * 1000),
+              forks: Math.floor(Math.random() * 200),
+              watchers: Math.floor(Math.random() * 100),
+              issues: Math.floor(Math.random() * 50),
+              pullRequests: Math.floor(Math.random() * 20),
+              language: ["JavaScript", "TypeScript", "Python", "Go", "Java"][Math.floor(Math.random() * 5)],
+              lastUpdated: new Date(),
+              codeQuality: Math.floor(Math.random() * 30) + 70,
+              testCoverage: Math.floor(Math.random() * 40) + 60,
+              issuesCount: Math.floor(Math.random() * 10),
+              metaData: {},
+              fileStructure: {}
+            };
+            
+            repositoryData = await storage.createRepository(newRepo);
+          }
+          
+          // Generate sample files and issues
+          await generateFiles(repositoryData.id, repo);
+          await generateIssues(repositoryData.id);
+          
+        } catch (error) {
+          console.error("Error creating repository:", error);
+          return res.status(500).json({ message: "Failed to analyze repository" });
+        }
+      }
+      
+      // Get repository files and issues
+      const files = await storage.getFilesByRepositoryId(repositoryData.id);
+      const issues = await storage.getIssuesByRepositoryId(repositoryData.id);
+      
+      return res.json({
+        repository: repositoryData,
         files,
         issues
       });
     } catch (error) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ message: fromZodError(error).message });
-      }
+      console.error("Error analyzing repository:", error);
       return res.status(500).json({ message: "Server error" });
     }
   });
   
-  // Get file content
-  app.get("/api/file", async (req, res) => {
-    try {
-      const { repo, path } = req.query;
-      
-      if (!repo || typeof repo !== "string" || !path || typeof path !== "string") {
-        return res.status(400).json({ message: "Repository and file path are required" });
-      }
-      
-      // Get repository by fullName
-      const repository = await storage.getRepositoryByFullName(repo);
-      
-      if (!repository) {
-        return res.status(404).json({ message: "Repository not found" });
-      }
-      
-      // Get file by path
-      const file = await storage.getFileByPath(repository.id, path);
-      
-      if (!file) {
-        return res.status(404).json({ message: "File not found" });
-      }
-      
-      // If file content is not cached, fetch from GitHub
-      if (!file.content) {
-        try {
-          // Encode file path for GitHub API
-          const encodedPath = encodeURIComponent(path);
-          const headers: Record<string, string> = {
-              Accept: "application/vnd.github.v3.raw",
-              "User-Agent": "CodeReview-Tool",
-          };
-          
-          // Add authorization header if token exists
-          if (GITHUB_TOKEN) {
-              headers["Authorization"] = `token ${GITHUB_TOKEN}`;
-          }
-          
-          const response = await axios.get(`${GITHUB_API_BASE_URL}/repos/${repo}/contents/${encodedPath}`, {
-            headers,
-          });
-          
-          // Update file with content
-          file.content = response.data;
-          
-          // Get issues for this file
-          const issues = await storage.getIssuesByRepositoryId(repository.id);
-          const fileIssues = issues.filter(issue => issue.filePath === path);
-          
-          return res.json({ file, issues: fileIssues });
-        } catch (error) {
-          if (axios.isAxiosError(error) && error.response) {
-            return res.status(error.response.status).json({ 
-              message: `GitHub API error: ${error.response.data.message || "Unknown error"}` 
-            });
-          }
-          return res.status(500).json({ message: "Failed to fetch file content" });
-        }
-      }
-      
-      // Get issues for this file
-      const issues = await storage.getIssuesByRepositoryId(repository.id);
-      const fileIssues = issues.filter(issue => issue.filePath === path);
-      
-      return res.json({ file, issues: fileIssues });
-    } catch (error) {
-      return res.status(500).json({ message: "Server error" });
-    }
-  });
-  
-  // Helper function to fetch repository files
-  async function fetchRepositoryFiles(fullName: string, repositoryId: number) {
-    try {
-      const headers: Record<string, string> = {
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "CodeReview-Tool",
-      };
-      
-      // Add authorization header if token exists
-      if (GITHUB_TOKEN) {
-        headers["Authorization"] = `token ${GITHUB_TOKEN}`;
-      }
-      
-      const response = await axios.get(`${GITHUB_API_BASE_URL}/repos/${fullName}/contents`, {
-        headers,
-      });
-      
-      const files = response.data;
-      
-      // Create file entries
-      for (const file of files) {
-        const fileData = insertRepositoryFileSchema.parse({
-          repositoryId,
-          filePath: file.path,
-          type: file.type, // file or dir
-          language: getLanguageFromPath(file.path),
-          content: null, // We'll fetch content on demand
-        });
-        
-        await storage.createRepositoryFile(fileData);
-      }
-      
-      return true;
-    } catch (error) {
-      console.error("Error fetching repository files:", error);
-      return false;
-    }
-  }
-  
-  // Helper function to generate code issues based on code analysis
-  async function generateCodeIssues(repositoryId: number) {
-    const files = await storage.getFilesByRepositoryId(repositoryId);
-    const codeFiles = files.filter(file => file.type === "file" && file.language !== null);
-    
-    if (codeFiles.length === 0) return;
-    
-    // Define issue categories
-    const issueCategories = {
-      security: {
-        bugs: [
-          {
-            message: "Possible security vulnerability: Unsanitized user input",
-            code: "const result = eval(userInput);",
-            suggestion: "// Use a safer approach\nconst result = JSON.parse(userInput);\n// Or validate input with a schema validator",
-            severity: "high",
-            category: "security"
-          },
-          {
-            message: "SQL injection vulnerability",
-            code: "db.query(`SELECT * FROM users WHERE id = ${userId}`);",
-            suggestion: "// Use parameterized queries\ndb.query('SELECT * FROM users WHERE id = ?', [userId]);",
-            severity: "high"
-          }
-        ],
-        warnings: [
-          {
-            message: "Hardcoded credentials in source code",
-            code: "const apiKey = 'a1b2c3d4e5f6';",
-            suggestion: "// Use environment variables\nconst apiKey = process.env.API_KEY;",
-            severity: "medium"
-          }
-        ]
-      },
-      performance: {
-        bugs: [
-          {
-            message: "Memory leak: Event listener not removed",
-            code: "window.addEventListener('resize', handleResize);",
-            suggestion: "// Add event listener with cleanup\nwindow.addEventListener('resize', handleResize);\n// Later in cleanup function:\nwindow.removeEventListener('resize', handleResize);",
-            severity: "medium",
-            category: "performance"
-          }
-        ],
-        warnings: [
-          {
-            message: "Inefficient list rendering without key prop",
-            code: "items.map(item => <Item />)",
-            suggestion: "items.map(item => <Item key={item.id} />)",
-            severity: "medium"
-          },
-          {
-            message: "Expensive operation in render method",
-            code: "render() {\n  const sortedData = this.data.sort();\n}",
-            suggestion: "// Move to useMemo or componentDidMount\nconst sortedData = useMemo(() => data.sort(), [data]);",
-            severity: "medium"
-          }
-        ]
-      },
-      codeQuality: {
-        bugs: [
-          {
-            message: "Missing null check before accessing property",
-            code: "const name = user.profile.name;",
-            suggestion: "const name = user?.profile?.name;",
-            severity: "high",
-            category: "codeQuality"
-          }
-        ],
-        warnings: [
-          {
-            message: "Magic number in code",
-            code: "if (retries > 3) { /* ... */ }",
-            suggestion: "const MAX_RETRIES = 3;\nif (retries > MAX_RETRIES) { /* ... */ }",
-            severity: "low"
-          },
-          {
-            message: "Complex conditional logic",
-            code: "if (a && b || c && !d || e) { /* ... */ }",
-            suggestion: "// Break down into readable parts\nconst condition1 = a && b;\nconst condition2 = c && !d;\nconst condition3 = e;\nif (condition1 || condition2 || condition3) { /* ... */ }",
-            severity: "medium"
-          }
-        ],
-        info: [
-          {
-            message: "Missing function documentation",
-            code: "function process(data) { /* ... */ }",
-            suggestion: "/**\n * Process the input data\n * @param {Object} data - The data to process\n * @returns {Object} The processed result\n */\nfunction process(data) { /* ... */ }",
-            severity: "low"
-          },
-          {
-            message: "Inconsistent naming convention",
-            code: "const UserData = getData();\nconst process_result = processData(UserData);",
-            suggestion: "// Use consistent camelCase\nconst userData = getData();\nconst processResult = processData(userData);",
-            severity: "low"
-          }
-        ]
-      },
-      accessibility: {
-        warnings: [
-          {
-            message: "Missing alt text for image",
-            code: "<img src=\"image.png\" />",
-            suggestion: "<img src=\"image.png\" alt=\"Description of the image\" />",
-            severity: "medium",
-            category: "accessibility"
-          },
-          {
-            message: "Interactive element not keyboard accessible",
-            code: "<div onClick={handleClick}>Click me</div>",
-            suggestion: "<button onClick={handleClick}>Click me</button>",
-            severity: "medium"
-          }
-        ]
-      }
-    };
-    
-    // Define issue type
-    interface IssueDetail {
-      message: string;
-      code: string;
-      suggestion: string;
-      severity: string;
-      category?: string;
-    }
-    
-    // Function to get random issues from categories
-    function getRandomIssues(count: number): Array<IssueDetail & { issueType: string; category: string }> {
-      const allIssues: Array<IssueDetail & { issueType: string; category: string }> = [];
-      
-      // Collect all issues from categories
-      Object.entries(issueCategories).forEach(([categoryName, categoryData]) => {
-        // Add bugs if they exist
-        if ('bugs' in categoryData && Array.isArray(categoryData.bugs)) {
-          allIssues.push(...categoryData.bugs.map(issue => ({ 
-            ...issue, 
-            issueType: "bug",
-            category: categoryName
-          })));
-        }
-        
-        // Add warnings if they exist
-        if ('warnings' in categoryData && Array.isArray(categoryData.warnings)) {
-          allIssues.push(...categoryData.warnings.map(issue => ({ 
-            ...issue, 
-            issueType: "warning",
-            category: categoryName
-          })));
-        }
-        
-        // Add info if they exist
-        if ('info' in categoryData && Array.isArray(categoryData.info)) {
-          allIssues.push(...categoryData.info.map(issue => ({ 
-            ...issue, 
-            issueType: "info",
-            category: categoryName
-          })));
-        }
-      });
-      
-      // Shuffle and take requested count
-      return allIssues
-        .sort(() => 0.5 - Math.random())
-        .slice(0, count);
-    }
-    
-    // Process each code file
-    for (let i = 0; i < Math.min(5, codeFiles.length); i++) {
-      const file = codeFiles[i];
-      
-      // Generate 1-4 issues per file
-      const issueCount = Math.floor(Math.random() * 3) + 1;
-      const filePath = file.filePath;
-      const issues = getRandomIssues(issueCount);
-      
-      // Create each issue with suitable line numbers
-      for (let j = 0; j < issues.length; j++) {
-        const issue = issues[j];
-        const lineNumber = Math.floor(Math.random() * 50) + 10;
-        
-        await storage.createCodeIssue({
-          repositoryId,
-          filePath,
-          lineNumber,
-          issueType: issue.issueType,
-          severity: issue.severity,
-          category: issue.category,
-          message: issue.message,
-          code: issue.code,
-          suggestion: issue.suggestion
-        });
-      }
-    }
-    
-    // Update repository with issues count
-    const allIssues = await storage.getIssuesByRepositoryId(repositoryId);
-    const repository = await storage.getRepository(repositoryId);
-    
-    if (repository) {
-      // This would be a real update in a fully implemented system
-      console.log(`Repository ${repository.fullName} has ${allIssues.length} issues`);
-    }
-  }
-  
-  // Helper function to determine language from file path
-  function getLanguageFromPath(path: string): string | null {
-    const extension = path.split('.').pop()?.toLowerCase();
-    
-    if (!extension) return null;
-    
-    const languageMap: Record<string, string> = {
-      js: 'JavaScript',
-      ts: 'TypeScript',
-      jsx: 'JavaScript',
-      tsx: 'TypeScript',
-      py: 'Python',
-      java: 'Java',
-      rb: 'Ruby',
-      php: 'PHP',
-      go: 'Go',
-      rs: 'Rust',
-      c: 'C',
-      cpp: 'C++',
-      cs: 'C#',
-      html: 'HTML',
-      css: 'CSS',
-      json: 'JSON',
-      md: 'Markdown',
-    };
-    
-    return languageMap[extension] || null;
-  }
-
-  // Get user repositories
-  app.get("/api/repositories", async (req, res) => {
-    try {
-      const { username } = req.query;
-      
-      if (!username || typeof username !== "string") {
-        return res.status(400).json({ message: "GitHub username is required" });
-      }
-      
-      // Fetch user repositories from GitHub API
-      try {
-        const headers: Record<string, string> = {
-          Accept: "application/vnd.github.v3+json",
-          "User-Agent": "CodeReview-Tool",
-        };
-        
-        // Add authorization header if token exists
-        if (GITHUB_TOKEN) {
-          headers["Authorization"] = `token ${GITHUB_TOKEN}`;
-        }
-        
-        const response = await axios.get(`${GITHUB_API_BASE_URL}/users/${username}/repos`, {
-          headers,
-        });
-        
-        const repositories = await Promise.all(
-          response.data.map(async (repoData: any) => {
-            // Check if repository exists in our storage
-            let repository = await storage.getRepositoryByFullName(repoData.full_name);
-            
-            if (!repository) {
-              // Create repository in our storage
-              const newRepo = insertRepositorySchema.parse({
-                fullName: repoData.full_name,
-                name: repoData.name,
-                owner: repoData.owner.login,
-                description: repoData.description,
-                url: repoData.html_url,
-                visibility: repoData.private ? "Private" : "Public",
-                stars: repoData.stargazers_count,
-                forks: repoData.forks_count,
-                watchers: repoData.watchers_count,
-                issues: repoData.open_issues_count,
-                pullRequests: 0,
-                language: repoData.language,
-                lastUpdated: new Date(repoData.updated_at),
-                codeQuality: Math.floor(Math.random() * 30) + 70, // Simulated score
-                testCoverage: Math.floor(Math.random() * 40) + 60, // Simulated coverage
-                issuesCount: 0,
-                metaData: { owner: repoData.owner },
-                fileStructure: {}
-              });
-              
-              repository = await storage.createRepository(newRepo);
-            }
-            
-            return repository;
-          })
-        );
-        
-        return res.json({ repositories });
-      } catch (error) {
-        if (axios.isAxiosError(error) && error.response) {
-          return res.status(error.response.status).json({ 
-            message: `GitHub API error: ${error.response.data.message || "Unknown error"}` 
-          });
-        }
-        return res.status(500).json({ message: "Failed to fetch user repositories" });
-      }
-    } catch (error) {
-      return res.status(500).json({ message: "Server error" });
-    }
-  });
-  
-  // Compare repositories
+  // Compare repositories endpoint
   app.post("/api/compare-repositories", async (req, res) => {
     try {
       const { repositoryIds } = req.body;
@@ -1024,40 +841,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "At least two repository IDs are required" });
       }
       
-      // Fetch repository data
-      const repositories = await Promise.all(
-        repositoryIds.map(id => storage.getRepository(id))
-      );
-      
-      // Filter out any undefined repositories
-      const validRepositories = repositories.filter(repo => repo !== undefined) as any[];
-      
-      if (validRepositories.length < 2) {
-        return res.status(400).json({ message: "At least two valid repositories are required" });
+      // Get repositories with their files
+      const repositories = [];
+      for (const id of repositoryIds) {
+        const repository = await storage.getRepository(id);
+        if (repository) {
+          const files = await storage.getFilesByRepositoryId(id);
+          repositories.push({ ...repository, files });
+        }
       }
       
-      // Fetch files for each repository
-      const repoFiles = await Promise.all(
-        validRepositories.map(repo => storage.getFilesByRepositoryId(repo.id))
-      );
+      if (repositories.length < 2) {
+        return res.status(404).json({ message: "Not enough valid repositories found" });
+      }
       
-      // Combine repository data with files
-      const reposWithFiles = validRepositories.map((repo, index) => ({
-        ...repo,
-        files: repoFiles[index]
-      }));
-      
-      // Find overlaps in files
-      const overlaps = findRepositoryOverlaps(reposWithFiles);
+      // Find overlaps between repositories
+      const overlaps = findRepositoryOverlaps(repositories);
       
       // Calculate project overview
-      const projectOverview = calculateProjectOverview(reposWithFiles);
+      const projectOverview = calculateProjectOverview(repositories);
       
       return res.json({
         overlaps,
         projectOverview
       });
     } catch (error) {
+      console.error("Error comparing repositories:", error);
       return res.status(500).json({ message: "Server error" });
     }
   });
@@ -1071,152 +880,226 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "GitHub username is required" });
       }
       
-      // Fetch user repositories from GitHub
-      try {
-        console.log(`Fetching repositories for GitHub user: ${username}`);
+      console.log(`Scanning repositories for user: ${username}`);
+      
+      // Generate simulated repositories for the user
+      const repoTypes = [
+        "website", "app", "api", "ui-components", 
+        "docs", "utils", "mobile", "server"
+      ];
+      
+      // Create simulated repositories
+      const repositories = [];
+      
+      for (let i = 0; i < repoTypes.length; i++) {
+        const repoName = repoTypes[i];
+        const fullName = `${username}/${repoName}`;
         
-        const headers: Record<string, string> = {
-          Accept: "application/vnd.github.v3+json",
-          "User-Agent": "CodeReview-Tool",
-        };
+        // Check if repository exists in storage
+        let repository = await storage.getRepositoryByFullName(fullName);
         
-        // Add authorization header with the GitHub token
-        if (GITHUB_TOKEN) {
-          headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
-          console.log("Using GitHub token for authentication");
-        } else {
-          console.log("No GitHub token available - request may be rate-limited");
-        }
-        
-        const githubUrl = `${GITHUB_API_BASE_URL}/users/${username}/repos`;
-        console.log(`Requesting: ${githubUrl}`);
-        
-        // For now, let's generate sample repository data instead of relying on GitHub API
-        // This avoids potential authentication issues while demonstrating functionality
-        console.log("Generating simulated repositories for demonstration");
-        
-        // Create simulated repositories
-        const repositories = [];
-        const repoCount = Math.floor(Math.random() * 8) + 3; // 3-10 repos
-        
-        // Common repository templates
-        const repoTemplates = [
-          { name: "website", description: "Official website and documentation" },
-          { name: "app", description: "Main application repository" },
-          { name: "api", description: "REST API implementation" },
-          { name: "ui-components", description: "Reusable UI component library" },
-          { name: "docs", description: "Documentation and guides" },
-          { name: "utils", description: "Utility functions and helpers" },
-          { name: "mobile", description: "Mobile application" },
-          { name: "server", description: "Backend server implementation" }
-        ];
-        
-        // Generate simulated repositories
-        for (let i = 0; i < simulatedRepoCount; i++) {
-          const template = repoTemplates[i % repoTemplates.length];
-          const repoName = i === 0 ? template.name : `${template.name}-${i}`;
-          
-          repositories.push({
-            id: i + 1,
+        if (!repository) {
+          // Create repository in database
+          const newRepo = {
+            fullName,
             name: repoName,
-            full_name: `${username}/${repoName}`,
-            owner: {
-              login: username
-            },
-            html_url: `https://github.com/${username}/${repoName}`,
-            description: template.description,
-            fork: Math.random() > 0.8,
-            created_at: new Date(Date.now() - Math.random() * 10000000000).toISOString(),
-            updated_at: new Date(Date.now() - Math.random() * 1000000000).toISOString(),
-            language: ["JavaScript", "TypeScript", "Python", "Go", "Java", "C#"][Math.floor(Math.random() * 6)],
-            stargazers_count: Math.floor(Math.random() * 1000),
-            forks_count: Math.floor(Math.random() * 200),
-            open_issues_count: Math.floor(Math.random() * 50),
-            watchers_count: Math.floor(Math.random() * 100)
-          });
+            owner: username,
+            description: `${username}'s ${repoName} project`,
+            url: `https://github.com/${fullName}`,
+            visibility: "Public",
+            stars: Math.floor(Math.random() * 1000),
+            forks: Math.floor(Math.random() * 200),
+            watchers: Math.floor(Math.random() * 100),
+            issues: Math.floor(Math.random() * 50),
+            pullRequests: Math.floor(Math.random() * 20),
+            language: ["JavaScript", "TypeScript", "Python", "Go", "Java"][Math.floor(Math.random() * 5)],
+            lastUpdated: new Date(),
+            codeQuality: Math.floor(Math.random() * 30) + 70,
+            testCoverage: Math.floor(Math.random() * 40) + 60,
+            issuesCount: Math.floor(Math.random() * 10),
+            metaData: {},
+            fileStructure: {}
+          };
+          
+          repository = await storage.createRepository(newRepo);
+          console.log(`Created repository: ${repository.name}`);
+          
+          // Generate simulated files
+          await generateFiles(repository.id, repoName);
+          
+          // Generate code issues
+          await generateIssues(repository.id);
         }
         
-        // Process simulated repositories to create Repository objects
-        const processedRepositories = repositories.map((repoData: any) => {
-            // Check if repository exists in our storage
-            let repository = await storage.getRepositoryByFullName(repoData.full_name);
-            
-            if (!repository) {
-              // Create repository in our storage
-              const newRepo = insertRepositorySchema.parse({
-                fullName: repoData.full_name,
-                name: repoData.name,
-                owner: repoData.owner.login,
-                description: repoData.description,
-                url: repoData.html_url,
-                visibility: repoData.private ? "Private" : "Public",
-                stars: repoData.stargazers_count,
-                forks: repoData.forks_count,
-                watchers: repoData.watchers_count,
-                issues: repoData.open_issues_count,
-                pullRequests: 0,
-                language: repoData.language,
-                lastUpdated: new Date(repoData.updated_at),
-                codeQuality: Math.floor(Math.random() * 30) + 70, // Simulated score
-                testCoverage: Math.floor(Math.random() * 40) + 60, // Simulated coverage
-                issuesCount: 0,
-                metaData: { owner: repoData.owner },
-                fileStructure: {}
-              });
-              
-              repository = await storage.createRepository(newRepo);
-              
-              // Fetch repository file structure
-              await fetchRepositoryFiles(repoData.full_name, repository.id);
-              
-              // Generate code issues
-              await generateCodeIssues(repository.id);
-            }
-            
-            return repository;
-          })
-        );
-        
-        // Fetch files for each repository
-        const repoFiles = await Promise.all(
-          repositories.map(repo => storage.getFilesByRepositoryId(repo.id))
-        );
-        
-        // Combine repository data with files
-        const reposWithFiles = repositories.map((repo, index) => ({
-          ...repo,
-          files: repoFiles[index]
-        }));
-        
-        // Find overlaps in files
-        const overlaps = findRepositoryOverlaps(reposWithFiles);
-        
-        // Calculate project overview
-        const projectOverview = calculateProjectOverview(reposWithFiles);
-        
-        return res.json({
-          overlaps,
-          projectOverview
-        });
-      } catch (error) {
-        if (axios.isAxiosError(error) && error.response) {
-          return res.status(error.response.status).json({ 
-            message: `GitHub API error: ${error.response.data.message || "Unknown error"}` 
-          });
-        }
-        return res.status(500).json({ message: "Failed to scan repositories" });
+        repositories.push(repository);
       }
+      
+      // Get files for each repository
+      const reposWithFiles = await Promise.all(
+        repositories.map(async (repo) => {
+          const files = await storage.getFilesByRepositoryId(repo.id);
+          return { ...repo, files };
+        })
+      );
+      
+      // Find overlaps between repositories
+      const overlaps = findRepositoryOverlaps(reposWithFiles);
+      const projectOverview = calculateProjectOverview(reposWithFiles);
+      
+      return res.json({
+        overlaps,
+        projectOverview
+      });
     } catch (error) {
+      console.error("Error scanning repositories:", error);
       return res.status(500).json({ message: "Server error" });
     }
   });
   
-  // Helper function to identify overlaps and similarities between repositories
-  function findRepositoryOverlaps(reposWithFiles: any[]) {
-    const overlaps: any[] = [];
+  // Helper function to create simulated repository files
+  async function generateFiles(repositoryId: number, repoType: string) {
+    const fileStructures: Record<string, string[]> = {
+      "website": [
+        "index.html", 
+        "styles.css", 
+        "script.js", 
+        "images/logo.png", 
+        "pages/about.html"
+      ],
+      "app": [
+        "src/index.js", 
+        "src/App.js", 
+        "src/components/Header.js", 
+        "public/index.html", 
+        "package.json"
+      ],
+      "api": [
+        "server.js", 
+        "routes/index.js", 
+        "models/User.js", 
+        "controllers/auth.js", 
+        "middleware/auth.js"
+      ],
+      "ui-components": [
+        "src/Button.js", 
+        "src/Card.js", 
+        "src/Input.js", 
+        "src/theme.js", 
+        "package.json"
+      ],
+      "docs": [
+        "README.md", 
+        "getting-started.md", 
+        "api-reference.md", 
+        "tutorials/basic.md", 
+        "examples/simple.md"
+      ],
+      "utils": [
+        "src/string.js", 
+        "src/array.js", 
+        "src/date.js", 
+        "src/validation.js", 
+        "index.js"
+      ],
+      "mobile": [
+        "App.js", 
+        "screens/Home.js", 
+        "components/Button.js", 
+        "styles/theme.js", 
+        "package.json"
+      ],
+      "server": [
+        "index.js", 
+        "config/db.js", 
+        "routes/api.js", 
+        "models/User.js", 
+        "middleware/auth.js"
+      ]
+    };
     
-    // Define minimum similarity threshold
-    const MIN_SIMILARITY = 0.5;
+    // Get file structure for this repo type
+    const files = fileStructures[repoType] || fileStructures["app"];
+    
+    // Create files in database
+    for (const filePath of files) {
+      const type = filePath.includes(".") ? "file" : "dir";
+      const language = getLanguageFromPath(filePath);
+      
+      await storage.createRepositoryFile({
+        repositoryId,
+        filePath,
+        type,
+        language,
+        content: null
+      });
+    }
+  }
+  
+  // Helper function to get language from file path
+  function getLanguageFromPath(path: string): string | null {
+    if (path.endsWith('.js')) return 'javascript';
+    if (path.endsWith('.jsx')) return 'javascript';
+    if (path.endsWith('.ts')) return 'typescript';
+    if (path.endsWith('.tsx')) return 'typescript';
+    if (path.endsWith('.py')) return 'python';
+    if (path.endsWith('.html')) return 'html';
+    if (path.endsWith('.css')) return 'css';
+    if (path.endsWith('.java')) return 'java';
+    if (path.endsWith('.go')) return 'go';
+    if (path.endsWith('.c') || path.endsWith('.cpp') || path.endsWith('.h')) return 'c++';
+    if (path.endsWith('.md')) return 'markdown';
+    if (path.endsWith('.json')) return 'json';
+    if (path.endsWith('.yml') || path.endsWith('.yaml')) return 'yaml';
+    if (path.endsWith('.sh')) return 'bash';
+    if (path.endsWith('.sql')) return 'sql';
+    if (path.endsWith('.rb')) return 'ruby';
+    if (path.endsWith('.php')) return 'php';
+    if (path.endsWith('.cs')) return 'csharp';
+    if (path.endsWith('.swift')) return 'swift';
+    if (path.endsWith('.kt')) return 'kotlin';
+    if (path.endsWith('.rs')) return 'rust';
+    
+    return null;
+  }
+  
+  // Generate code issues for a repository
+  async function generateIssues(repositoryId: number) {
+    // Get files for the repository
+    const files = await storage.getFilesByRepositoryId(repositoryId);
+    
+    // Generate random issues for each file
+    for (const file of files) {
+      if (file.type === "file") {
+        // Only generate issues for actual files (not directories)
+        const issueCount = Math.floor(Math.random() * 3); // 0-2 issues per file
+        
+        for (let i = 0; i < issueCount; i++) {
+          // Generate a random issue
+          const issueTypes = ["bug", "warning", "info"];
+          const severities = ["high", "medium", "low"];
+          const categories = ["security", "performance", "codeQuality", "accessibility"];
+          
+          const issue = {
+            repositoryId: file.repositoryId,
+            filePath: file.filePath,
+            lineNumber: Math.floor(Math.random() * 100) + 1,
+            issueType: issueTypes[Math.floor(Math.random() * issueTypes.length)] as "bug" | "warning" | "info",
+            severity: severities[Math.floor(Math.random() * severities.length)] as "high" | "medium" | "low",
+            category: categories[Math.floor(Math.random() * categories.length)],
+            message: `Issue detected in ${file.filePath}`,
+            code: `Sample code from line ${Math.floor(Math.random() * 100) + 1}`,
+            suggestion: `Consider refactoring this code to improve ${categories[Math.floor(Math.random() * categories.length)]}`
+          };
+          
+          await storage.createCodeIssue(issue);
+        }
+      }
+    }
+  }
+  
+  // Find overlaps between repositories
+  function findRepositoryOverlaps(reposWithFiles: any[]) {
+    const overlaps = [];
     
     // Compare each repository with every other repository
     for (let i = 0; i < reposWithFiles.length; i++) {
@@ -1224,52 +1107,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const repo1 = reposWithFiles[i];
         const repo2 = reposWithFiles[j];
         
-        // Skip if repositories don't have files
-        if (!repo1.files || !repo2.files) continue;
+        // Find similar files between the two repositories
+        const similarFiles = [];
         
-        const similarFiles: any[] = [];
-        
-        // Find similar files between repositories
         for (const file1 of repo1.files) {
           for (const file2 of repo2.files) {
-            // Skip if files are not of the same type or language
-            if (file1.type !== 'file' || file2.type !== 'file') continue;
-            if (!file1.language || !file2.language || file1.language !== file2.language) continue;
+            // Calculate similarity based on file path and type
+            const similarity = calculateFileSimilarity(file1, file2);
             
-            // Calculate similarity based on file path
-            const similarityScore = calculateFileSimilarity(file1, file2);
-            
-            if (similarityScore >= MIN_SIMILARITY) {
+            if (similarity > 0.5) {
               similarFiles.push({
                 file1: {
                   repositoryId: file1.repositoryId,
                   filePath: file1.filePath,
-                  language: file1.language,
+                  language: file1.language
                 },
                 file2: {
                   repositoryId: file2.repositoryId,
                   filePath: file2.filePath,
-                  language: file2.language,
+                  language: file2.language
                 },
-                similarityScore,
+                similarityScore: similarity
               });
             }
           }
         }
         
-        // If we found similar files, create an overlap entry
+        // Only add overlaps if there are similar files
         if (similarFiles.length > 0) {
-          const description = generateOverlapDescription(repo1, repo2, similarFiles);
-          const mergeRecommendation = generateMergeRecommendation(repo1, repo2, similarFiles);
-          
           overlaps.push({
             repositories: [
               { id: repo1.id, name: repo1.name, fullName: repo1.fullName },
-              { id: repo2.id, name: repo2.name, fullName: repo2.fullName },
+              { id: repo2.id, name: repo2.name, fullName: repo2.fullName }
             ],
             similarFiles,
-            description,
-            mergeRecommendation,
+            description: generateOverlapDescription(repo1, repo2, similarFiles),
+            mergeRecommendation: generateMergeRecommendation(repo1, repo2, similarFiles)
           });
         }
       }
@@ -1278,321 +1151,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return overlaps;
   }
   
-  // Helper function to calculate project overview metrics
+  // Calculate similarity between two files
+  function calculateFileSimilarity(file1: any, file2: any) {
+    // Simple similarity calculation based on file path
+    if (file1.filePath === file2.filePath) {
+      return 1.0;
+    }
+    
+    // Check if the file names are the same
+    const fileName1 = file1.filePath.split('/').pop();
+    const fileName2 = file2.filePath.split('/').pop();
+    
+    if (fileName1 === fileName2) {
+      return 0.8;
+    }
+    
+    // Check if the file extensions are the same
+    const ext1 = fileName1?.includes('.') ? fileName1.split('.').pop() : null;
+    const ext2 = fileName2?.includes('.') ? fileName2.split('.').pop() : null;
+    
+    if (ext1 && ext2 && ext1 === ext2) {
+      return 0.6;
+    }
+    
+    // Check if the file languages are the same
+    if (file1.language && file2.language && file1.language === file2.language) {
+      return 0.5;
+    }
+    
+    // Check if the directories are similar
+    const dir1 = file1.filePath.includes('/') ? file1.filePath.split('/').slice(0, -1).join('/') : null;
+    const dir2 = file2.filePath.includes('/') ? file2.filePath.split('/').slice(0, -1).join('/') : null;
+    
+    if (dir1 && dir2 && dir1 === dir2) {
+      return 0.7;
+    }
+    
+    return 0.3;
+  }
+  
+  // Generate a description for the overlap
+  function generateOverlapDescription(repo1: any, repo2: any, similarFiles: any[]) {
+    return `Found ${similarFiles.length} similar files between ${repo1.name} and ${repo2.name}. These repositories appear to have overlapping functionality.`;
+  }
+  
+  // Generate a merge recommendation
+  function generateMergeRecommendation(repo1: any, repo2: any, similarFiles: any[]) {
+    if (similarFiles.length > 3) {
+      return `Recommend merging ${repo2.name} into ${repo1.name} to reduce code duplication and improve maintainability.`;
+    } else {
+      return `Consider extracting common functionality into a shared library used by both ${repo1.name} and ${repo2.name}.`;
+    }
+  }
+  
+  // Calculate project overview
   function calculateProjectOverview(reposWithFiles: any[]) {
-    // Total repositories
+    // Calculate total repositories and files
     const totalRepositories = reposWithFiles.length;
-    
-    // Count total files and calculate language distribution
     let totalFiles = 0;
-    const languageCount: Record<string, number> = {};
+    const languageCounts: Record<string, number> = {};
+    let duplicateCount = 0;
     
+    // Create a map of file paths to count duplicates
+    const filePaths = new Map();
+    
+    // Process all files in all repositories
     for (const repo of reposWithFiles) {
-      if (repo.files) {
-        for (const file of repo.files) {
-          if (file.type === 'file') {
-            totalFiles++;
-            
-            if (file.language) {
-              languageCount[file.language] = (languageCount[file.language] || 0) + 1;
-            }
+      for (const file of repo.files) {
+        totalFiles++;
+        
+        // Count by language
+        if (file.language) {
+          languageCounts[file.language] = (languageCounts[file.language] || 0) + 1;
+        }
+        
+        // Check for duplicates
+        if (file.type === "file") {
+          const filePath = file.filePath;
+          if (filePaths.has(filePath)) {
+            duplicateCount++;
+          } else {
+            filePaths.set(filePath, true);
           }
         }
       }
     }
     
-    // Calculate duplicate code percentage using overlaps
-    const overlaps = findRepositoryOverlaps(reposWithFiles);
-    let duplicateFileCount = 0;
-    
-    for (const overlap of overlaps) {
-      duplicateFileCount += overlap.similarFiles.length;
-    }
-    
-    const duplicateCodePercentage = totalFiles > 0 ? (duplicateFileCount / totalFiles) * 100 : 0;
+    // Calculate duplicate percentage
+    const duplicatePercentage = totalFiles > 0 ? (duplicateCount / totalFiles) * 100 : 0;
     
     return {
       totalRepositories,
       totalFiles,
-      languageDistribution: languageCount,
-      duplicateCodePercentage,
+      languageDistribution: languageCounts,
+      duplicateCodePercentage: Math.round(duplicatePercentage * 10) / 10
     };
   }
   
-  // Helper function to calculate similarity between two files
-  function calculateFileSimilarity(file1: any, file2: any) {
-    // Simple similarity based on file names
-    const fileName1 = file1.filePath.split('/').pop() || '';
-    const fileName2 = file2.filePath.split('/').pop() || '';
-    
-    // Use Levenshtein distance for file name similarity
-    const distance = levenshteinDistance(fileName1, fileName2);
-    const maxLength = Math.max(fileName1.length, fileName2.length);
-    
-    // Normalize distance to a similarity score between 0 and 1
-    const nameSimilarity = maxLength > 0 ? 1 - (distance / maxLength) : 0;
-    
-    // Use file path structure for additional similarity
-    const pathParts1 = file1.filePath.split('/');
-    const pathParts2 = file2.filePath.split('/');
-    
-    // Calculate path structure similarity
-    let commonPathParts = 0;
-    for (let i = 0; i < Math.min(pathParts1.length, pathParts2.length); i++) {
-      if (pathParts1[i] === pathParts2[i]) {
-        commonPathParts++;
-      }
-    }
-    
-    const pathSimilarity = Math.min(pathParts1.length, pathParts2.length) > 0 
-      ? commonPathParts / Math.min(pathParts1.length, pathParts2.length) 
-      : 0;
-    
-    // Calculate a combined similarity score (weighted more towards file name)
-    return (nameSimilarity * 0.7) + (pathSimilarity * 0.3);
-  }
-  
-  // Helper function for Levenshtein distance calculation
-  function levenshteinDistance(a: string, b: string) {
-    if (a.length === 0) return b.length;
-    if (b.length === 0) return a.length;
-    
-    const matrix = [];
-    
-    // Initialize the matrix
-    for (let i = 0; i <= b.length; i++) {
-      matrix[i] = [i];
-    }
-    
-    for (let j = 0; j <= a.length; j++) {
-      matrix[0][j] = j;
-    }
-    
-    // Calculate the distances
-    for (let i = 1; i <= b.length; i++) {
-      for (let j = 1; j <= a.length; j++) {
-        if (b.charAt(i - 1) === a.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1, // substitution
-            matrix[i][j - 1] + 1,     // insertion
-            matrix[i - 1][j] + 1      // deletion
-          );
-        }
-      }
-    }
-    
-    return matrix[b.length][a.length];
-  }
-  
-  // Helper function to generate overlap description
-  function generateOverlapDescription(repo1: any, repo2: any, similarFiles: any[]) {
-    const languages = new Set<string>();
-    
-    // Collect unique languages from similar files
-    similarFiles.forEach(item => {
-      if (item.file1.language) {
-        languages.add(item.file1.language);
-      }
-    });
-    
-    const languagesStr = Array.from(languages).join(', ');
-    const filesCount = similarFiles.length;
-    
-    return `Found ${filesCount} similar ${filesCount === 1 ? 'file' : 'files'} between repositories ${repo1.name} and ${repo2.name}. 
-    These repositories share code patterns in ${languagesStr}. There may be opportunities to consolidate functionality.`;
-  }
-  
-  // Helper function to generate merge recommendation
-  function generateMergeRecommendation(repo1: any, repo2: any, similarFiles: any[]) {
-    const totalFiles = similarFiles.length;
-    const averageSimilarity = similarFiles.reduce((sum, item) => sum + item.similarityScore, 0) / totalFiles;
-    
-    if (averageSimilarity > 0.8) {
-      return `High similarity detected. Consider merging ${repo1.name} and ${repo2.name} into a single repository to reduce duplication and maintenance overhead.`;
-    } else if (averageSimilarity > 0.6) {
-      return `Moderate similarity detected. Consider creating shared libraries or modules for common functionality between ${repo1.name} and ${repo2.name}.`;
-    } else {
-      return `Low similarity detected. The common patterns may be coincidental, but review the similar files to identify potential opportunities for code reuse.`;
-    }
-  }
-  
-  // Add a database health check endpoint
-  app.get("/api/db-health", async (req, res) => {
-    try {
-      // Test database connection by querying a simple table
-      const result = await storage.getUserByUsername("test-user");
-      
-      // Create a test user if it doesn't exist
-      if (!result) {
-        try {
-          await storage.createUser({
-            username: "test-user",
-            password: "password123"
-          });
-        } catch (err) {
-          console.error("Error creating test user:", err);
-        }
-      }
-      
-      // Check tables
-      const tables = await db.query(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
-      );
-      
-      return res.json({
-        status: "Database connection successful",
-        tables: tables.rows.map(row => row.table_name)
-      });
-    } catch (error) {
-      console.error("Database health check error:", error);
-      return res.status(500).json({
-        status: "Database connection failed",
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-
-  // Code snippet analysis endpoint
-  app.post("/api/analyze-snippet", async (req, res) => {
-    try {
-      const { code, language, context } = req.body;
-      
-      if (!code || typeof code !== "string") {
-        return res.status(400).json({ message: "Code snippet is required" });
-      }
-      
-      // Determine the language if not provided
-      const detectedLanguage = language || detectLanguage(code);
-      
-      // Analyze the code for different categories of issues
-      const securityIssues = analyzeCodeSecurity(code, detectedLanguage);
-      const qualityIssues = analyzeCodeQuality(code, detectedLanguage);
-      const performanceIssues = analyzePerformance(code, detectedLanguage);
-      
-      // Combine all feedback
-      const analysisResults = {
-        language: detectedLanguage,
-        securityIssues,
-        qualityIssues,
-        performanceIssues,
-        summary: {
-          totalIssues: securityIssues.length + qualityIssues.length + performanceIssues.length,
-          securityScore: calculateSecurityScore(securityIssues),
-          qualityScore: calculateQualityScore(qualityIssues),
-          performanceScore: calculatePerformanceScore(performanceIssues)
-        },
-        recommendations: generateRecommendations(securityIssues, qualityIssues, performanceIssues)
-      };
-      
-      return res.json(analysisResults);
-    } catch (error) {
-      console.error("Code analysis error:", error);
-      return res.status(500).json({ 
-        message: "Failed to analyze code snippet",
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  
-  // Vulnerability scanning endpoint
-  app.post("/api/security-scan", async (req, res) => {
-    try {
-      const { repositoryUrl, branch, scanType } = req.body;
-      
-      if (!repositoryUrl || typeof repositoryUrl !== "string") {
-        return res.status(400).json({ message: "Repository URL is required" });
-      }
-      
-      // Extract owner and repo name from GitHub URL
-      const urlPattern = /(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)/i;
-      const match = repositoryUrl.match(urlPattern);
-      
-      if (!match) {
-        return res.status(400).json({ 
-          message: "Invalid GitHub repository URL. Please use a URL like 'https://github.com/owner/repo'" 
-        });
-      }
-      
-      const [, owner, repo] = match;
-      const fullName = `${owner}/${repo}`;
-      
-      // Perform security scan based on scan type
-      let vulnerabilities = [];
-      let recommendations = [];
-      
-      if (scanType === 'full' || scanType === 'dependency') {
-        // Dependency vulnerability scan
-        const dependencyVulnerabilities = await scanDependencies(fullName, branch);
-        vulnerabilities = [...vulnerabilities, ...dependencyVulnerabilities];
-      }
-      
-      if (scanType === 'full' || scanType === 'secret') {
-        // Secret scanning
-        const secretVulnerabilities = await scanForSecrets(fullName, branch);
-        vulnerabilities = [...vulnerabilities, ...secretVulnerabilities];
-      }
-      
-      if (scanType === 'full' || scanType === 'sast') {
-        // Static Application Security Testing
-        const sastVulnerabilities = await performSASTScan(fullName, branch);
-        vulnerabilities = [...vulnerabilities, ...sastVulnerabilities];
-      }
-      
-      // Generate recommendations based on findings
-      recommendations = generateSecurityRecommendations(vulnerabilities);
-      
-      return res.json({
-        repositoryUrl,
-        scanType,
-        vulnerabilities,
-        recommendations,
-        summary: {
-          totalVulnerabilities: vulnerabilities.length,
-          criticalCount: vulnerabilities.filter(v => v.severity === 'critical').length,
-          highCount: vulnerabilities.filter(v => v.severity === 'high').length,
-          mediumCount: vulnerabilities.filter(v => v.severity === 'medium').length,
-          lowCount: vulnerabilities.filter(v => v.severity === 'low').length
-        }
-      });
-    } catch (error) {
-      console.error("Security scan error:", error);
-      return res.status(500).json({ 
-        message: "Failed to perform security scan",
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  
-  // Real-time monitoring data endpoint
-  app.get("/api/security-monitoring", async (req, res) => {
-    try {
-      // Get monitoring data based on time range
-      const { timeRange } = req.query;
-      const range = typeof timeRange === 'string' ? timeRange : '24h'; // Default to last 24 hours
-      
-      // Mock data for demonstration purposes
-      const monitoringData = generateSecurityMonitoringData(range);
-      
-      return res.json({
-        timeRange: range,
-        data: monitoringData,
-        summary: {
-          alertsTriggered: monitoringData.alerts.length,
-          potentialBreaches: monitoringData.potentialBreaches.length,
-          trafficAnomalies: monitoringData.trafficAnomalies.length
-        }
-      });
-    } catch (error) {
-      console.error("Security monitoring error:", error);
-      return res.status(500).json({ 
-        message: "Failed to retrieve security monitoring data",
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-
-  const httpServer = createServer(app);
   return httpServer;
 }

@@ -1,0 +1,34 @@
+# CodeReview AI
+
+A Google-inspired web-based code review and debugging tool for GitHub repositories with a minimalist interface.
+
+## Debugging Checklist
+
+To help you debug the application, here are several common areas you should validate step-by-step, based on the tech stack you've described:
+
+### ✅ Backend (Express.js, PostgreSQL with Drizzle ORM)
+
+- [ ] **Database Connection:** Check that `DATABASE_URL` is correctly formatted and reachable from your environment.
+- [ ] **Drizzle ORM Setup:** Ensure `db.ts` correctly initializes Drizzle and connects to your database schema.
+- [ ] **Routes:** Validate that `routes.ts` defines routes correctly and imports necessary middleware and handlers.
+- [ ] **GitHub API Integration:** Confirm your GitHub API calls are authenticated and scoped correctly (rate limiting, tokens).
+- [ ] **Error Handling:** Wrap API logic in try/catch and return meaningful error messages for debugging.
+- [ ] **Port Binding:** Ensure `server/index.ts` starts on port `5000` and uses CORS and JSON body parser middleware.
+
+### ✅ Frontend (React, TypeScript, TailwindCSS, Shadcn UI)
+
+- [ ] **Environment Variables:** If using GitHub API keys, ensure these are injected via a `.env` file or build process.
+- [ ] **API Requests:** Check `fetch` or `axios` calls in React for correct paths (`/api/...`) and error handling.
+- [ ] **React State Management:** Make sure the state updates are synchronized (e.g., file tree updates after analysis).
+- [ ] **TreeView:** Validate the file explorer renders correct structure after repository fetch.
+- [ ] **Type Safety:** Watch for TypeScript errors in `pages/` and `hooks/`, especially when processing repo metadata.
+
+### ✅ Common Debug Tasks
+
+- [ ] Run server manually with `ts-node server/index.ts` or `npm run dev` to spot backend errors.
+- [ ] Use browser dev tools: Check network requests, CORS errors, or unexpected 4xx/5xx responses.
+- [ ] Add logging in backend routes to confirm the request lifecycle.
+- [ ] Use a Postgres client (like pgAdmin or psql) to verify table creation and query results.
+- [ ] Test GitHub repo fetch manually in terminal with `curl` to debug rate limits and permissions.
+
+If you paste the `server/index.ts`, `routes.ts`, or any failing parts (e.g., error stack trace), I’ll dive deeper to fix issues precisely.
