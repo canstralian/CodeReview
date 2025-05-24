@@ -13,6 +13,488 @@ const GITHUB_API_BASE_URL = "https://api.github.com";
 // GitHub Authentication token (to increase rate limit)
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
+// Code analysis utility functions
+function detectLanguage(code: string): string {
+  // Simple language detection based on keywords and syntax
+  if (code.includes('import React') || code.includes('useState') || code.includes('export default')) {
+    return 'javascript';
+  } else if (code.includes('def ') && code.includes(':') && (code.includes('print(') || code.includes('return '))) {
+    return 'python';
+  } else if (code.includes('public class') || code.includes('private void') || code.includes('System.out.println')) {
+    return 'java';
+  } else if (code.includes('using namespace') || code.includes('#include') || code.includes('int main()')) {
+    return 'cpp';
+  } else {
+    return 'unknown';
+  }
+}
+
+// Security analysis for code snippets
+function analyzeCodeSecurity(code: string, language: string): Array<any> {
+  const securityIssues = [];
+
+  // Common security issues across languages
+  if (code.includes('eval(') || code.includes('exec(')) {
+    securityIssues.push({
+      type: 'security',
+      severity: 'high',
+      line: getLineNumber(code, 'eval('),
+      message: 'Use of eval() or exec() can lead to code injection vulnerabilities',
+      suggestion: 'Avoid using eval() or exec(). Use safer alternatives for dynamic code execution.'
+    });
+  }
+
+  if (code.match(/password\s*=\s*['"][^'"]+['"]/) || code.match(/api[_-]?key\s*=\s*['"][^'"]+['"]/) || code.match(/secret\s*=\s*['"][^'"]+['"]/) || code.match(/token\s*=\s*['"][^'"]+['"]/)) {
+    securityIssues.push({
+      type: 'security',
+      severity: 'critical',
+      line: getLineNumber(code, 'password'),
+      message: 'Hardcoded credentials detected in source code',
+      suggestion: 'Never hardcode credentials in source code. Use environment variables or a secure vault service.'
+    });
+  }
+
+  if (code.includes('SELECT') && code.includes('FROM') && !code.includes('?') && (code.includes('${') || code.includes("' +") || code.includes("\" +"))) {
+    securityIssues.push({
+      type: 'security',
+      severity: 'critical',
+      line: getLineNumber(code, 'SELECT'),
+      message: 'Potential SQL injection vulnerability',
+      suggestion: 'Use parameterized queries instead of string concatenation for SQL statements.'
+    });
+  }
+
+  // Language-specific security checks
+  if (language === 'javascript') {
+    if (code.includes('innerHTML') || code.includes('document.write(')) {
+      securityIssues.push({
+        type: 'security',
+        severity: 'high',
+        line: getLineNumber(code, 'innerHTML'),
+        message: 'Potential XSS vulnerability with direct DOM manipulation',
+        suggestion: 'Use textContent or safer alternatives like React\'s JSX to prevent XSS attacks.'
+      });
+    }
+  } else if (language === 'python') {
+    if (code.includes('pickle.loads') || code.includes('yaml.load(')) {
+      securityIssues.push({
+        type: 'security',
+        severity: 'high',
+        line: getLineNumber(code, 'pickle.loads'),
+        message: 'Use of unsafe deserialization functions',
+        suggestion: 'Use safer alternatives like pickle.loads(data, encoding="ASCII") or yaml.safe_load().'
+      });
+    }
+  }
+
+  return securityIssues;
+}
+
+// Code quality analysis
+function analyzeCodeQuality(code: string, language: string): Array<any> {
+  const qualityIssues = [];
+
+  // Check for long functions (lines > 30)
+  const lines = code.split('\n');
+  if (lines.length > 30) {
+    qualityIssues.push({
+      type: 'quality',
+      severity: 'medium',
+      line: 1,
+      message: 'Function is too long (exceeds 30 lines)',
+      suggestion: 'Break down long functions into smaller, more focused functions with clear responsibilities.'
+    });
+  }
+
+  // Check for deep nesting
+  let maxIndentation = 0;
+  let currentIndentation = 0;
+  for (const line of lines) {
+    const indentMatch = line.match(/^(\s+)/);
+    currentIndentation = indentMatch ? indentMatch[1].length : 0;
+    maxIndentation = Math.max(maxIndentation, currentIndentation);
+  }
+
+  if (maxIndentation >= 12) {  // More than 3 levels of indentation (assuming 4 spaces per level)
+    qualityIssues.push({
+      type: 'quality',
+      severity: 'medium',
+      line: 1,
+      message: 'Deep nesting detected in code',
+      suggestion: 'Refactor to reduce nesting. Consider extracting code into helper functions or using early returns.'
+    });
+  }
+
+  // Language-specific quality checks
+  if (language === 'javascript') {
+    // Check for console.log statements
+    if (code.includes('console.log(')) {
+      qualityIssues.push({
+        type: 'quality',
+        severity: 'low',
+        line: getLineNumber(code, 'console.log'),
+        message: 'Debug console.log() statements should be removed in production code',
+        suggestion: 'Remove debug statements or replace with a proper logging system with different log levels.'
+      });
+    }
+  } else if (language === 'python') {
+    // Check for print statements
+    if (code.includes('print(')) {
+      qualityIssues.push({
+        type: 'quality',
+        severity: 'low',
+        line: getLineNumber(code, 'print('),
+        message: 'Debug print() statements should be removed in production code',
+        suggestion: 'Remove debug statements or replace with a proper logging system like the logging module.'
+      });
+    }
+  }
+
+  return qualityIssues;
+}
+
+// Performance analysis
+function analyzePerformance(code: string, language: string): Array<any> {
+  const performanceIssues = [];
+
+  // Check for inefficient loops
+  if ((code.includes('for') && code.includes('for')) || 
+      (code.includes('while') && code.includes('while'))) {
+    performanceIssues.push({
+      type: 'performance',
+      severity: 'medium',
+      line: getLineNumber(code, 'for'),
+      message: 'Nested loops detected, potential O(n²) time complexity',
+      suggestion: 'Consider restructuring the algorithm to avoid nested loops when possible, or ensure the inner loop doesn\'t iterate over a large dataset.'
+    });
+  }
+
+  // Language-specific performance checks
+  if (language === 'javascript') {
+    // Check for inefficient array operations
+    if (code.includes('.forEach') && code.includes('splice')) {
+      performanceIssues.push({
+        type: 'performance',
+        severity: 'medium',
+        line: getLineNumber(code, 'splice'),
+        message: 'Inefficient array modification inside loop',
+        suggestion: 'Modifying arrays inside a loop with methods like splice() is inefficient. Consider using filter() or map() instead.'
+      });
+    }
+  } else if (language === 'python') {
+    // Check for inefficient list operations
+    if (code.includes('for') && code.includes('+ [')) {
+      performanceIssues.push({
+        type: 'performance',
+        severity: 'medium',
+        line: getLineNumber(code, '+ ['),
+        message: 'Inefficient list concatenation in loop',
+        suggestion: 'Use list comprehensions or extend() instead of + for list concatenation inside loops.'
+      });
+    }
+  }
+
+  return performanceIssues;
+}
+
+// Helper to get line number for reporting issues
+function getLineNumber(code: string, searchTerm: string): number {
+  const lines = code.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(searchTerm)) {
+      return i + 1;
+    }
+  }
+  return 1;
+}
+
+// Calculate security score based on issues
+function calculateSecurityScore(issues: Array<any>): number {
+  const baseScore = 100;
+  let deductions = 0;
+  
+  for (const issue of issues) {
+    if (issue.severity === 'critical') {
+      deductions += 25;
+    } else if (issue.severity === 'high') {
+      deductions += 15;
+    } else if (issue.severity === 'medium') {
+      deductions += 10;
+    } else {
+      deductions += 5;
+    }
+  }
+  
+  return Math.max(0, baseScore - deductions);
+}
+
+// Calculate code quality score
+function calculateQualityScore(issues: Array<any>): number {
+  const baseScore = 100;
+  let deductions = 0;
+  
+  for (const issue of issues) {
+    if (issue.severity === 'high') {
+      deductions += 15;
+    } else if (issue.severity === 'medium') {
+      deductions += 10;
+    } else {
+      deductions += 5;
+    }
+  }
+  
+  return Math.max(0, baseScore - deductions);
+}
+
+// Calculate performance score
+function calculatePerformanceScore(issues: Array<any>): number {
+  const baseScore = 100;
+  let deductions = 0;
+  
+  for (const issue of issues) {
+    if (issue.severity === 'high') {
+      deductions += 15;
+    } else if (issue.severity === 'medium') {
+      deductions += 10;
+    } else {
+      deductions += 5;
+    }
+  }
+  
+  return Math.max(0, baseScore - deductions);
+}
+
+// Generate recommendations based on issues
+function generateRecommendations(securityIssues: Array<any>, qualityIssues: Array<any>, performanceIssues: Array<any>): Array<string> {
+  const recommendations = [];
+  
+  // Security recommendations
+  if (securityIssues.length > 0) {
+    if (securityIssues.some(i => i.severity === 'critical')) {
+      recommendations.push('Critical security issues detected! Fix immediately before deploying this code.');
+    }
+    if (securityIssues.some(i => i.message.includes('injection'))) {
+      recommendations.push('Implement proper input validation and sanitization to prevent injection attacks.');
+    }
+    if (securityIssues.some(i => i.message.includes('credentials'))) {
+      recommendations.push('Move all credentials and secrets to environment variables or a secure vault service.');
+    }
+  }
+  
+  // Quality recommendations
+  if (qualityIssues.length > 0) {
+    if (qualityIssues.some(i => i.message.includes('long'))) {
+      recommendations.push('Refactor long functions into smaller, more focused units to improve readability and maintainability.');
+    }
+    if (qualityIssues.some(i => i.message.includes('nesting'))) {
+      recommendations.push('Reduce code complexity by minimizing nested conditionals and loops.');
+    }
+  }
+  
+  // Performance recommendations
+  if (performanceIssues.length > 0) {
+    if (performanceIssues.some(i => i.message.includes('O(n²)'))) {
+      recommendations.push('Review algorithm efficiency to avoid quadratic time complexity where possible.');
+    }
+  }
+  
+  return recommendations;
+}
+
+// Security scanning functions
+async function scanDependencies(repo: string, branch?: string): Promise<Array<any>> {
+  // Simulated dependency scanning - in a real implementation, this would call a vulnerability database
+  return [
+    {
+      id: 'GHSA-xvch-5gv4-984h',
+      severity: 'high',
+      package: 'lodash',
+      currentVersion: '4.17.15',
+      patchedVersion: '4.17.21',
+      description: 'Prototype Pollution in lodash',
+      recommendation: 'Upgrade to version 4.17.21 or later'
+    },
+    {
+      id: 'GHSA-7fh5-64p2-3v2j',
+      severity: 'medium',
+      package: 'axios',
+      currentVersion: '0.21.0',
+      patchedVersion: '0.21.1',
+      description: 'Server-Side Request Forgery in axios',
+      recommendation: 'Upgrade to version 0.21.1 or later'
+    }
+  ];
+}
+
+async function scanForSecrets(repo: string, branch?: string): Promise<Array<any>> {
+  // Simulated secret scanning - in a real implementation, this would analyze code for hardcoded secrets
+  return [
+    {
+      severity: 'critical',
+      type: 'API Key',
+      location: 'src/config.js:15',
+      description: 'Potential API key found in source code',
+      recommendation: 'Move API keys to environment variables or secure vaults'
+    }
+  ];
+}
+
+async function performSASTScan(repo: string, branch?: string): Promise<Array<any>> {
+  // Simulated Static Application Security Testing
+  return [
+    {
+      severity: 'high',
+      type: 'Cross-Site Scripting (XSS)',
+      location: 'src/components/Comments.js:42',
+      description: 'Unsanitized user input rendered directly to DOM',
+      recommendation: 'Use React\'s JSX or sanitize HTML content before rendering'
+    },
+    {
+      severity: 'medium',
+      type: 'Insecure Cookie',
+      location: 'src/utils/auth.js:78',
+      description: 'Cookies set without secure and httpOnly flags',
+      recommendation: 'Add secure and httpOnly flags to sensitive cookies'
+    }
+  ];
+}
+
+function generateSecurityRecommendations(vulnerabilities: Array<any>): Array<string> {
+  const recommendations = [];
+  
+  // Group vulnerabilities by type for targeted recommendations
+  const hasDependencyIssues = vulnerabilities.some(v => v.package);
+  const hasSecretIssues = vulnerabilities.some(v => v.type === 'API Key');
+  const hasXssIssues = vulnerabilities.some(v => v.type === 'Cross-Site Scripting (XSS)');
+  const hasCookieIssues = vulnerabilities.some(v => v.type === 'Insecure Cookie');
+  
+  if (hasDependencyIssues) {
+    recommendations.push('Implement a dependency scanning tool in your CI pipeline to catch outdated packages automatically.');
+    recommendations.push('Set up automatic security updates for non-breaking patches to dependencies.');
+  }
+  
+  if (hasSecretIssues) {
+    recommendations.push('Use a secret scanning tool in pre-commit hooks to prevent credentials from being committed.');
+    recommendations.push('Implement a secrets management solution like AWS Secrets Manager, HashiCorp Vault, or GitHub Secrets.');
+  }
+  
+  if (hasXssIssues) {
+    recommendations.push('Use content security policy (CSP) headers to mitigate XSS attacks.');
+    recommendations.push('Implement input validation on both client and server sides.');
+  }
+  
+  if (hasCookieIssues) {
+    recommendations.push('Review all cookie settings to ensure secure, httpOnly, and SameSite attributes are properly set.');
+  }
+  
+  // General recommendations
+  recommendations.push('Perform regular security scans and penetration testing on your application.');
+  recommendations.push('Establish a security training program for all developers.');
+  
+  return recommendations;
+}
+
+// Generate simulated security monitoring data
+function generateSecurityMonitoringData(timeRange: string): any {
+  // Create time points for the data based on the requested range
+  const now = new Date();
+  let timePoints = [];
+  let interval = 0;
+  
+  if (timeRange === '24h') {
+    interval = 60; // minutes
+    for (let i = 0; i < 24; i++) {
+      const time = new Date(now);
+      time.setHours(now.getHours() - 23 + i);
+      time.setMinutes(0, 0, 0);
+      timePoints.push(time);
+    }
+  } else if (timeRange === '7d') {
+    interval = 24 * 60; // 1 day in minutes
+    for (let i = 0; i < 7; i++) {
+      const time = new Date(now);
+      time.setDate(now.getDate() - 6 + i);
+      time.setHours(0, 0, 0, 0);
+      timePoints.push(time);
+    }
+  } else {
+    interval = 30 * 24 * 60; // 1 month in minutes
+    for (let i = 0; i < 12; i++) {
+      const time = new Date(now);
+      time.setMonth(now.getMonth() - 11 + i);
+      time.setDate(1);
+      time.setHours(0, 0, 0, 0);
+      timePoints.push(time);
+    }
+  }
+  
+  // Generate metrics for each time point
+  const metrics = timePoints.map(time => {
+    return {
+      timestamp: time.toISOString(),
+      requestCount: Math.floor(Math.random() * 1000) + 500,
+      errorRate: Math.random() * 0.05,
+      avgResponseTime: Math.random() * 200 + 100,
+      uniqueIPs: Math.floor(Math.random() * 200) + 50
+    };
+  });
+  
+  // Generate simulated alerts
+  const alertTypes = ['Authentication Failure', 'Rate Limit Exceeded', 'Suspicious IP Access', 'Abnormal User Behavior'];
+  const alerts = [];
+  
+  // Add some alerts distributed across the time range
+  for (let i = 0; i < Math.floor(Math.random() * 5) + 3; i++) {
+    const alertTime = timePoints[Math.floor(Math.random() * timePoints.length)];
+    alerts.push({
+      timestamp: alertTime.toISOString(),
+      type: alertTypes[Math.floor(Math.random() * alertTypes.length)],
+      severity: Math.random() > 0.7 ? 'high' : Math.random() > 0.4 ? 'medium' : 'low',
+      source: Math.random() > 0.5 ? 'firewall' : 'application',
+      description: 'Potential security event detected.'
+    });
+  }
+  
+  // Generate potential breach data
+  const potentialBreaches = [];
+  if (Math.random() > 0.7) {
+    const breachTime = timePoints[Math.floor(Math.random() * timePoints.length)];
+    potentialBreaches.push({
+      timestamp: breachTime.toISOString(),
+      type: 'Multiple Failed Logins',
+      targetUser: 'admin_user',
+      sourceIP: '203.0.113.' + Math.floor(Math.random() * 255),
+      status: 'investigating'
+    });
+  }
+  
+  // Generate traffic anomalies
+  const trafficAnomalies = [];
+  const anomalyTimeIndex = Math.floor(Math.random() * (timePoints.length - 1)) + 1;
+  const anomalyTime = timePoints[anomalyTimeIndex];
+  
+  // Simulate a traffic spike
+  if (Math.random() > 0.5) {
+    trafficAnomalies.push({
+      timestamp: anomalyTime.toISOString(),
+      type: 'Traffic Spike',
+      normalLevel: '~750 req/min',
+      anomalousLevel: '~3500 req/min',
+      duration: Math.floor(Math.random() * 30) + 5 + ' minutes',
+      status: Math.random() > 0.5 ? 'resolved' : 'ongoing'
+    });
+  }
+  
+  return {
+    timeRange,
+    interval,
+    metrics,
+    alerts,
+    potentialBreaches,
+    trafficAnomalies
+  };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // API routes prefix with /api
   
@@ -919,6 +1401,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Database health check error:", error);
       return res.status(500).json({
         status: "Database connection failed",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Code snippet analysis endpoint
+  app.post("/api/analyze-snippet", async (req, res) => {
+    try {
+      const { code, language, context } = req.body;
+      
+      if (!code || typeof code !== "string") {
+        return res.status(400).json({ message: "Code snippet is required" });
+      }
+      
+      // Determine the language if not provided
+      const detectedLanguage = language || detectLanguage(code);
+      
+      // Analyze the code for different categories of issues
+      const securityIssues = analyzeCodeSecurity(code, detectedLanguage);
+      const qualityIssues = analyzeCodeQuality(code, detectedLanguage);
+      const performanceIssues = analyzePerformance(code, detectedLanguage);
+      
+      // Combine all feedback
+      const analysisResults = {
+        language: detectedLanguage,
+        securityIssues,
+        qualityIssues,
+        performanceIssues,
+        summary: {
+          totalIssues: securityIssues.length + qualityIssues.length + performanceIssues.length,
+          securityScore: calculateSecurityScore(securityIssues),
+          qualityScore: calculateQualityScore(qualityIssues),
+          performanceScore: calculatePerformanceScore(performanceIssues)
+        },
+        recommendations: generateRecommendations(securityIssues, qualityIssues, performanceIssues)
+      };
+      
+      return res.json(analysisResults);
+    } catch (error) {
+      console.error("Code analysis error:", error);
+      return res.status(500).json({ 
+        message: "Failed to analyze code snippet",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Vulnerability scanning endpoint
+  app.post("/api/security-scan", async (req, res) => {
+    try {
+      const { repositoryUrl, branch, scanType } = req.body;
+      
+      if (!repositoryUrl || typeof repositoryUrl !== "string") {
+        return res.status(400).json({ message: "Repository URL is required" });
+      }
+      
+      // Extract owner and repo name from GitHub URL
+      const urlPattern = /(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)/i;
+      const match = repositoryUrl.match(urlPattern);
+      
+      if (!match) {
+        return res.status(400).json({ 
+          message: "Invalid GitHub repository URL. Please use a URL like 'https://github.com/owner/repo'" 
+        });
+      }
+      
+      const [, owner, repo] = match;
+      const fullName = `${owner}/${repo}`;
+      
+      // Perform security scan based on scan type
+      let vulnerabilities = [];
+      let recommendations = [];
+      
+      if (scanType === 'full' || scanType === 'dependency') {
+        // Dependency vulnerability scan
+        const dependencyVulnerabilities = await scanDependencies(fullName, branch);
+        vulnerabilities = [...vulnerabilities, ...dependencyVulnerabilities];
+      }
+      
+      if (scanType === 'full' || scanType === 'secret') {
+        // Secret scanning
+        const secretVulnerabilities = await scanForSecrets(fullName, branch);
+        vulnerabilities = [...vulnerabilities, ...secretVulnerabilities];
+      }
+      
+      if (scanType === 'full' || scanType === 'sast') {
+        // Static Application Security Testing
+        const sastVulnerabilities = await performSASTScan(fullName, branch);
+        vulnerabilities = [...vulnerabilities, ...sastVulnerabilities];
+      }
+      
+      // Generate recommendations based on findings
+      recommendations = generateSecurityRecommendations(vulnerabilities);
+      
+      return res.json({
+        repositoryUrl,
+        scanType,
+        vulnerabilities,
+        recommendations,
+        summary: {
+          totalVulnerabilities: vulnerabilities.length,
+          criticalCount: vulnerabilities.filter(v => v.severity === 'critical').length,
+          highCount: vulnerabilities.filter(v => v.severity === 'high').length,
+          mediumCount: vulnerabilities.filter(v => v.severity === 'medium').length,
+          lowCount: vulnerabilities.filter(v => v.severity === 'low').length
+        }
+      });
+    } catch (error) {
+      console.error("Security scan error:", error);
+      return res.status(500).json({ 
+        message: "Failed to perform security scan",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Real-time monitoring data endpoint
+  app.get("/api/security-monitoring", async (req, res) => {
+    try {
+      // Get monitoring data based on time range
+      const { timeRange } = req.query;
+      const range = typeof timeRange === 'string' ? timeRange : '24h'; // Default to last 24 hours
+      
+      // Mock data for demonstration purposes
+      const monitoringData = generateSecurityMonitoringData(range);
+      
+      return res.json({
+        timeRange: range,
+        data: monitoringData,
+        summary: {
+          alertsTriggered: monitoringData.alerts.length,
+          potentialBreaches: monitoringData.potentialBreaches.length,
+          trafficAnomalies: monitoringData.trafficAnomalies.length
+        }
+      });
+    } catch (error) {
+      console.error("Security monitoring error:", error);
+      return res.status(500).json({ 
+        message: "Failed to retrieve security monitoring data",
         error: error instanceof Error ? error.message : String(error)
       });
     }
