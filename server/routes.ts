@@ -591,7 +591,9 @@ async function generateRealFiles(repositoryId: number, owner: string, repo: stri
     // Fall back to generating sample files - using the repo name as type
     const repoTypes = ["website", "app", "api", "ui-components", "docs", "utils", "mobile", "server"];
     const repoType = repoTypes.find(type => repo.toLowerCase().includes(type)) || "app";
-    await generateFiles(repositoryId, repoType);
+    // We'll handle this case by creating minimal file structure
+    console.log(`Could not fetch real files for ${owner}/${repo}, skipping file generation`);
+    return;
   }
 }
 
@@ -884,6 +886,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error comparing repositories:", error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // Get real file content from GitHub
+  app.get("/api/file-content", async (req, res) => {
+    try {
+      const { owner, repo, path } = req.query;
+      
+      if (!owner || !repo || !path) {
+        return res.status(400).json({ message: "Owner, repo, and path are required" });
+      }
+      
+      if (typeof owner !== 'string' || typeof repo !== 'string' || typeof path !== 'string') {
+        return res.status(400).json({ message: "Parameters must be strings" });
+      }
+      
+      try {
+        const content = await githubClient.getFileContent(owner, repo, path);
+        
+        return res.json({
+          path,
+          content,
+          language: getLanguageFromPath(path)
+        });
+      } catch (error) {
+        console.error("Error fetching file content:", error);
+        return res.status(404).json({ message: "File not found or could not be accessed" });
+      }
+    } catch (error) {
+      console.error("Error in file content endpoint:", error);
       return res.status(500).json({ message: "Server error" });
     }
   });
