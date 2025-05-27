@@ -547,7 +547,54 @@ function generateSecurityMonitoringData(timeRange: string): any {
   return data;
 }
 
-// Register all routes
+// Helper function to fetch real repository files from GitHub
+async function generateRealFiles(repositoryId: number, owner: string, repo: string) {
+  try {
+    // Get repository contents from GitHub
+    const contents = await githubClient.getRepositoryContents(owner, repo);
+    
+    // Process and store files
+    for (const item of contents) {
+      const language = getLanguageFromPath(item.path);
+      
+      await storage.createRepositoryFile({
+        repositoryId,
+        filePath: item.path,
+        type: item.type === 'dir' ? 'dir' : 'file',
+        language,
+        content: null // We'll fetch content on demand
+      });
+    }
+    
+    // If it's a directory, recursively fetch subdirectories (limited depth for performance)
+    const directories = contents.filter(item => item.type === 'dir').slice(0, 5); // Limit to 5 directories
+    for (const dir of directories) {
+      try {
+        const subContents = await githubClient.getRepositoryContents(owner, repo, dir.path);
+        for (const subItem of subContents.slice(0, 10)) { // Limit files per directory
+          const language = getLanguageFromPath(subItem.path);
+          
+          await storage.createRepositoryFile({
+            repositoryId,
+            filePath: subItem.path,
+            type: subItem.type === 'dir' ? 'dir' : 'file',
+            language,
+            content: null
+          });
+        }
+      } catch (error) {
+        console.log(`Could not fetch contents of directory ${dir.path}`);
+      }
+    }
+  } catch (error) {
+    console.error(`Error fetching real files for ${owner}/${repo}:`, error);
+    // Fall back to generating sample files - using the repo name as type
+    const repoTypes = ["website", "app", "api", "ui-components", "docs", "utils", "mobile", "server"];
+    const repoType = repoTypes.find(type => repo.toLowerCase().includes(type)) || "app";
+    await generateFiles(repositoryId, repoType);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   
@@ -930,7 +977,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: "Server error" });
     }
   });
-  
+
   // Helper function to create simulated repository files
   async function generateFiles(repositoryId: number, repoType: string) {
     const fileStructures: Record<string, string[]> = {
