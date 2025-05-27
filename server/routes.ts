@@ -206,13 +206,17 @@ function analyzePerformance(code: string, language: string): Array<any> {
 
 // Utility function to get line number of a pattern in code
 function getLineNumber(code: string, searchTerm: string): number {
-  if (!code.includes(searchTerm)) return 1;
+  if (!code || !searchTerm || !code.includes(searchTerm)) return 1;
   
-  const lines = code.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].includes(searchTerm)) {
-      return i + 1;
+  try {
+    const lines = code.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i] && lines[i].includes(searchTerm)) {
+        return i + 1;
+      }
     }
+  } catch (error) {
+    console.error('Error getting line number:', error);
   }
   return 1;
 }
@@ -511,11 +515,11 @@ function generateSecurityMonitoringData(timeRange: string): any {
   
   // Initialize attack types and source IPs counters
   attackTypes.forEach(type => {
-    data.attack_types[type] = 0;
+    (data.attack_types as Record<string, number>)[type] = 0;
   });
   
   sourceIPs.forEach(ip => {
-    data.source_ips[ip] = 0;
+    (data.source_ips as Record<string, number>)[ip] = 0;
   });
   
   // Generate timeline events
@@ -530,10 +534,10 @@ function generateSecurityMonitoringData(timeRange: string): any {
       const attackType = attackTypes[Math.floor(Math.random() * attackTypes.length)];
       const sourceIP = sourceIPs[Math.floor(Math.random() * sourceIPs.length)];
       
-      data.attack_types[attackType]++;
-      data.source_ips[sourceIP]++;
+      (data.attack_types as Record<string, number>)[attackType]++;
+      (data.source_ips as Record<string, number>)[sourceIP]++;
       
-      data.timeline.push({
+      (data.timeline as Array<any>).push({
         timestamp: date.toISOString(),
         type: attackType,
         severity: j % 10 === 0 ? 'critical' : j % 5 === 0 ? 'high' : j % 3 === 0 ? 'medium' : 'low',
@@ -577,8 +581,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { code, language } = req.body;
       
-      if (!code) {
-        return res.status(400).json({ message: "Code is required" });
+      if (!code || typeof code !== 'string') {
+        return res.status(400).json({ message: "Code is required and must be a string" });
+      }
+      
+      if (code.length > 50000) {
+        return res.status(400).json({ message: "Code is too large. Maximum size is 50KB" });
       }
       
       const detectedLanguage = language || detectLanguage(code);
@@ -652,7 +660,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Combine all vulnerabilities
       const allVulnerabilities = [
-        ...dependencyResults.flatMap(dep => dep.vulnerabilities?.map(v => ({ ...v, source: 'dependency', dependency: dep.name })) || []),
+        ...dependencyResults.flatMap(dep => dep.vulnerabilities?.map((v: any) => ({ ...v, source: 'dependency', dependency: dep.name })) || []),
         ...secretResults.map(s => ({ ...s, source: 'secret' })),
         ...sastResults.map(s => ({ ...s, source: 'sast' }))
       ];
@@ -701,12 +709,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { repository } = req.body;
       
-      if (!repository) {
-        return res.status(400).json({ message: "Repository name is required" });
+      if (!repository || typeof repository !== 'string') {
+        return res.status(400).json({ message: "Repository name is required and must be a string" });
       }
       
-      // Check if repository exists in our database
-      const [owner, repo] = repository.split('/');
+      // Validate repository format (owner/repo)
+      const repoParts = repository.split('/');
+      if (repoParts.length !== 2 || !repoParts[0] || !repoParts[1]) {
+        return res.status(400).json({ message: "Repository must be in format 'owner/repo'" });
+      }
+      
+      const [owner, repo] = repoParts;
       const fullName = `${owner}/${repo}`;
       
       let repositoryData = await storage.getRepositoryByFullName(fullName);
@@ -841,13 +854,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "At least two repository IDs are required" });
       }
       
+      // Validate that all IDs are numbers
+      if (!repositoryIds.every(id => typeof id === 'number' && id > 0)) {
+        return res.status(400).json({ message: "All repository IDs must be positive numbers" });
+      }
+      
+      // Limit the number of repositories to prevent memory issues
+      if (repositoryIds.length > 10) {
+        return res.status(400).json({ message: "Cannot compare more than 10 repositories at once" });
+      }
+      
       // Get repositories with their files
       const repositories = [];
       for (const id of repositoryIds) {
-        const repository = await storage.getRepository(id);
-        if (repository) {
-          const files = await storage.getFilesByRepositoryId(id);
-          repositories.push({ ...repository, files });
+        try {
+          const repository = await storage.getRepository(id);
+          if (repository) {
+            const files = await storage.getFilesByRepositoryId(id);
+            repositories.push({ ...repository, files });
+          }
+        } catch (error) {
+          console.error(`Error fetching repository ${id}:`, error);
+          // Continue with other repositories instead of failing completely
         }
       }
       
@@ -878,6 +906,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!username || typeof username !== "string") {
         return res.status(400).json({ message: "GitHub username is required" });
+      }
+      
+      // Validate username format (basic security check)
+      if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+        return res.status(400).json({ message: "Invalid username format" });
       }
       
       console.log(`Scanning repositories for user: ${username}`);
