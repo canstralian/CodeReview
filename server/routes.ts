@@ -6,12 +6,10 @@ import axios from "axios";
 import { ZodError } from "zod";
 import { insertRepositorySchema, insertCodeIssueSchema, insertRepositoryFileSchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
+import GitHubClient from "./services/githubClient";
 
-// GitHub API base URL
-const GITHUB_API_BASE_URL = "https://api.github.com";
-
-// GitHub Authentication token (to increase rate limit)
-const GITHUB_TOKEN = process.env.GH_ACCESS_TOKEN;
+// GitHub client instance
+const githubClient = new GitHubClient();
 
 // Code analysis utility functions
 function detectLanguage(code: string): string {
@@ -726,102 +724,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!repositoryData) {
         try {
-          // Fetch repository info from GitHub
-          const headers: Record<string, string> = {
-            Accept: "application/vnd.github.v3+json",
-            "User-Agent": "CodeReview-Tool"
-          };
-          
-          if (GITHUB_TOKEN) {
-            headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
-          }
-          
-          const githubUrl = `${GITHUB_API_BASE_URL}/repos/${fullName}`;
-          
-          try {
-            // Try to fetch from GitHub if token is available
-            if (GITHUB_TOKEN) {
-              const response = await axios.get(githubUrl, { headers });
-              const data = response.data;
+          // Try to fetch from GitHub using the new client
+          if (githubClient.hasAuthentication()) {
+            try {
+              const githubRepo = await githubClient.getRepository(owner, repo);
               
-              // Create repository in our database
+              // Create repository in our database using real GitHub data
               const newRepo = {
-                fullName: data.full_name,
-                name: data.name,
-                owner: data.owner.login,
-                description: data.description || `${data.name} repository`,
-                url: data.html_url,
-                visibility: data.private ? "Private" : "Public",
-                stars: data.stargazers_count,
-                forks: data.forks_count,
-                watchers: data.watchers_count,
-                issues: data.open_issues_count,
+                fullName: githubRepo.full_name,
+                name: githubRepo.name,
+                owner: githubRepo.owner.login,
+                description: githubRepo.description || `${githubRepo.name} repository`,
+                url: githubRepo.html_url,
+                visibility: githubRepo.private ? "Private" : "Public",
+                stars: githubRepo.stargazers_count,
+                forks: githubRepo.forks_count,
+                watchers: githubRepo.watchers_count,
+                issues: githubRepo.open_issues_count,
                 pullRequests: 0, // Not directly available from this endpoint
-                language: data.language,
-                lastUpdated: new Date(data.updated_at),
+                language: githubRepo.language,
+                lastUpdated: new Date(githubRepo.updated_at),
                 codeQuality: Math.floor(Math.random() * 30) + 70, // Simulated score
                 testCoverage: Math.floor(Math.random() * 40) + 60, // Simulated score
-                issuesCount: data.open_issues_count,
-                metaData: data,
+                issuesCount: githubRepo.open_issues_count,
+                metaData: githubRepo,
                 fileStructure: {}
               };
               
               repositoryData = await storage.createRepository(newRepo);
-            } else {
-              // If no token, create simulated repository data
-              const newRepo = {
-                fullName,
-                name: repo,
-                owner,
-                description: `${repo} repository`,
-                url: `https://github.com/${fullName}`,
-                visibility: "Public",
-                stars: Math.floor(Math.random() * 1000),
-                forks: Math.floor(Math.random() * 200),
-                watchers: Math.floor(Math.random() * 100),
-                issues: Math.floor(Math.random() * 50),
-                pullRequests: Math.floor(Math.random() * 20),
-                language: ["JavaScript", "TypeScript", "Python", "Go", "Java"][Math.floor(Math.random() * 5)],
-                lastUpdated: new Date(),
-                codeQuality: Math.floor(Math.random() * 30) + 70,
-                testCoverage: Math.floor(Math.random() * 40) + 60,
-                issuesCount: Math.floor(Math.random() * 10),
-                metaData: {},
-                fileStructure: {}
-              };
               
-              repositoryData = await storage.createRepository(newRepo);
+              // Fetch real repository structure
+              await generateRealFiles(repositoryData.id, owner, repo);
+            } catch (githubError) {
+              console.error("Error fetching from GitHub:", githubError);
+              throw new Error("Failed to fetch repository from GitHub. Please ensure the repository exists and is accessible.");
             }
-          } catch (githubError) {
-            console.error("Error fetching from GitHub:", githubError);
-            
-            // If GitHub fetch fails, create simulated repository data
-            const newRepo = {
-              fullName,
-              name: repo,
-              owner,
-              description: `${repo} repository`,
-              url: `https://github.com/${fullName}`,
-              visibility: "Public",
-              stars: Math.floor(Math.random() * 1000),
-              forks: Math.floor(Math.random() * 200),
-              watchers: Math.floor(Math.random() * 100),
-              issues: Math.floor(Math.random() * 50),
-              pullRequests: Math.floor(Math.random() * 20),
-              language: ["JavaScript", "TypeScript", "Python", "Go", "Java"][Math.floor(Math.random() * 5)],
-              lastUpdated: new Date(),
-              codeQuality: Math.floor(Math.random() * 30) + 70,
-              testCoverage: Math.floor(Math.random() * 40) + 60,
-              issuesCount: Math.floor(Math.random() * 10),
-              metaData: {},
-              fileStructure: {}
-            };
-            
-            repositoryData = await storage.createRepository(newRepo);
+          } else {
+            throw new Error("GitHub authentication required. Please provide a valid GitHub token to access repository data.");
           }
           
-          // Generate sample files and issues
-          await generateFiles(repositoryData.id, repo);
+          // Generate code issues for the repository
           await generateIssues(repositoryData.id);
           
         } catch (error) {
