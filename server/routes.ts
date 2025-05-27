@@ -11,7 +11,7 @@ import { fromZodError } from "zod-validation-error";
 const GITHUB_API_BASE_URL = "https://api.github.com";
 
 // GitHub Authentication token (to increase rate limit)
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const GITHUB_TOKEN = process.env.GH_ACCESS_TOKEN;
 
 // Code analysis utility functions
 function detectLanguage(code: string): string {
