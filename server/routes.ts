@@ -547,6 +547,46 @@ function generateSecurityMonitoringData(timeRange: string): any {
   return data;
 }
 
+// Helper function to get language from file path
+function getLanguageFromPath(path: string): string | null {
+  const extension = path.split('.').pop()?.toLowerCase();
+  const languageMap: Record<string, string> = {
+    'js': 'javascript',
+    'jsx': 'javascript',
+    'ts': 'typescript',
+    'tsx': 'typescript',
+    'py': 'python',
+    'java': 'java',
+    'cpp': 'cpp',
+    'c': 'c',
+    'cs': 'csharp',
+    'php': 'php',
+    'rb': 'ruby',
+    'go': 'go',
+    'rs': 'rust',
+    'swift': 'swift',
+    'kt': 'kotlin',
+    'scala': 'scala',
+    'html': 'html',
+    'css': 'css',
+    'scss': 'scss',
+    'sass': 'sass',
+    'less': 'less',
+    'json': 'json',
+    'xml': 'xml',
+    'yaml': 'yaml',
+    'yml': 'yaml',
+    'md': 'markdown',
+    'sql': 'sql',
+    'sh': 'shell',
+    'bash': 'shell',
+    'zsh': 'shell',
+    'fish': 'shell'
+  };
+  
+  return extension ? languageMap[extension] || null : null;
+}
+
 // Helper function to fetch real repository files from GitHub
 async function generateRealFiles(repositoryId: number, owner: string, repo: string) {
   try {
@@ -817,13 +857,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
         } catch (error) {
           console.error("Error creating repository:", error);
+          if (error instanceof Error) {
+            return res.status(400).json({ message: error.message });
+          }
           return res.status(500).json({ message: "Failed to analyze repository" });
         }
       }
       
-      // Get repository files and issues
-      const files = await storage.getFilesByRepositoryId(repositoryData.id);
-      const issues = await storage.getIssuesByRepositoryId(repositoryData.id);
+      // Get repository files and issues with error handling
+      let files, issues;
+      try {
+        files = await storage.getFilesByRepositoryId(repositoryData.id);
+        issues = await storage.getIssuesByRepositoryId(repositoryData.id);
+        
+        // Limit results to prevent memory issues
+        if (files.length > 1000) {
+          files = files.slice(0, 1000);
+        }
+        if (issues.length > 500) {
+          issues = issues.slice(0, 500);
+        }
+      } catch (dbError) {
+        console.error("Database error fetching files/issues:", dbError);
+        return res.status(500).json({ message: "Failed to retrieve repository data" });
+      }
       
       return res.json({
         repository: repositoryData,
@@ -1012,6 +1069,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Helper function to create simulated repository files
+
   async function generateFiles(repositoryId: number, repoType: string) {
     const fileStructures: Record<string, string[]> = {
       "website": [
@@ -1090,32 +1148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
   
-  // Helper function to get language from file path
-  function getLanguageFromPath(path: string): string | null {
-    if (path.endsWith('.js')) return 'javascript';
-    if (path.endsWith('.jsx')) return 'javascript';
-    if (path.endsWith('.ts')) return 'typescript';
-    if (path.endsWith('.tsx')) return 'typescript';
-    if (path.endsWith('.py')) return 'python';
-    if (path.endsWith('.html')) return 'html';
-    if (path.endsWith('.css')) return 'css';
-    if (path.endsWith('.java')) return 'java';
-    if (path.endsWith('.go')) return 'go';
-    if (path.endsWith('.c') || path.endsWith('.cpp') || path.endsWith('.h')) return 'c++';
-    if (path.endsWith('.md')) return 'markdown';
-    if (path.endsWith('.json')) return 'json';
-    if (path.endsWith('.yml') || path.endsWith('.yaml')) return 'yaml';
-    if (path.endsWith('.sh')) return 'bash';
-    if (path.endsWith('.sql')) return 'sql';
-    if (path.endsWith('.rb')) return 'ruby';
-    if (path.endsWith('.php')) return 'php';
-    if (path.endsWith('.cs')) return 'csharp';
-    if (path.endsWith('.swift')) return 'swift';
-    if (path.endsWith('.kt')) return 'kotlin';
-    if (path.endsWith('.rs')) return 'rust';
-    
-    return null;
-  }
+
   
   // Generate code issues for a repository
   async function generateIssues(repositoryId: number) {
