@@ -800,13 +800,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Repository name is required and must be a string" });
       }
       
+      // Enhanced input validation for security
+      if (repository.length > 200) {
+        return res.status(400).json({ message: "Repository name is too long" });
+      }
+      
+      // Sanitize input - remove any potentially dangerous characters
+      const sanitizedRepo = repository.trim().replace(/[^a-zA-Z0-9\-_./]/g, '');
+      
       // Validate repository format (owner/repo)
-      const repoParts = repository.split('/');
+      const repoParts = sanitizedRepo.split('/');
       if (repoParts.length !== 2 || !repoParts[0] || !repoParts[1]) {
         return res.status(400).json({ message: "Repository must be in format 'owner/repo'" });
       }
       
+      // Additional validation for owner and repo names
       const [owner, repo] = repoParts;
+      if (owner.length > 100 || repo.length > 100) {
+        return res.status(400).json({ message: "Owner or repository name is too long" });
+      }
       const fullName = `${owner}/${repo}`;
       
       let repositoryData = await storage.getRepositoryByFullName(fullName);
