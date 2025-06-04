@@ -1,5 +1,3 @@
-// src/utils/codeAnalysis.ts
-
 import type { Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import axios from "axios";
@@ -7,6 +5,10 @@ import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { insertRepositorySchema, insertCodeIssueSchema, insertRepositoryFileSchema } from "@shared/schema";
 import GitHubClient from "./services/githubClient";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
+import { storage } from "./storage";
+import type { Express } from "express";
 
 // -------------------------------------------------------------------------------------
 // Interface to represent a single security issue found in code
@@ -151,8 +153,6 @@ function analyzeCodeSecurity(code: string, language: string): SecurityIssue[] {
 // Export anything else you need in this module
 // -------------------------------------------------------------------------------------
 export { detectLanguage, analyzeCodeSecurity, getLineNumber };
-    });
-  }
 
   if (code.includes('SELECT') && code.includes('FROM') && !code.includes('?') && (code.includes('${') || code.includes("' +") || code.includes("\" +"))) {
     securityIssues.push({
