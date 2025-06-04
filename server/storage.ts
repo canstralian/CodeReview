@@ -102,8 +102,10 @@ export class DatabaseStorage implements IStorage {
     const [file] = await db
       .select()
       .from(repositoryFiles)
-      .where(eq(repositoryFiles.repositoryId, repositoryId))
-      .where(eq(repositoryFiles.filePath, filePath));
+      .where(and(
+        eq(repositoryFiles.repositoryId, repositoryId),
+        eq(repositoryFiles.filePath, filePath)
+      ));
     return file;
   }
 
