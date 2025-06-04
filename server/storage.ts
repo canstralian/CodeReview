@@ -1,17 +1,26 @@
-import { 
-  type User, type InsertUser,
-  type Repository, type InsertRepository,
-  type CodeIssue, type InsertCodeIssue,
-  type RepositoryFile, type InsertRepositoryFile
+import {
+  users,
+  repositories,
+  codeIssues,
+  repositoryFiles,
+  type User,
+  type UpsertUser,
+  type Repository,
+  type InsertRepository,
+  type CodeIssue,
+  type InsertCodeIssue,
+  type RepositoryFile,
+  type InsertRepositoryFile,
 } from "@shared/schema";
 import { db } from "./db";
+import { eq } from "drizzle-orm";
 
-// Storage interface with CRUD methods
+// Interface for storage operations
 export interface IStorage {
-  // Users
-  getUser(id: number): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  // User operations
+  // (IMPORTANT) these user operations are mandatory for Replit Auth.
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
   
   // Repositories
   getRepository(id: number): Promise<Repository | undefined>;
@@ -28,144 +37,83 @@ export interface IStorage {
   createRepositoryFile(file: InsertRepositoryFile): Promise<RepositoryFile>;
 }
 
-// Database storage implementation using direct PostgreSQL queries
 export class DatabaseStorage implements IStorage {
-  // User methods
-  async getUser(id: number): Promise<User | undefined> {
-    const result = await db.query('SELECT * FROM users WHERE id = $1', [id]);
-    return result.rows.length > 0 ? result.rows[0] : undefined;
+  // User operations
+  // (IMPORTANT) these user operations are mandatory for Replit Auth.
+
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
-    return result.rows.length > 0 ? result.rows[0] : undefined;
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const result = await db.query(
-      'INSERT INTO users (username, password) VALUES ($1, $2) RETURNING *',
-      [insertUser.username, insertUser.password]
-    );
-    return result.rows[0];
-  }
-  
-  // Repository methods
+  // Repository operations
   async getRepository(id: number): Promise<Repository | undefined> {
-    const result = await db.query('SELECT * FROM repositories WHERE id = $1', [id]);
-    return result.rows.length > 0 ? result.rows[0] : undefined;
+    const [repository] = await db.select().from(repositories).where(eq(repositories.id, id));
+    return repository;
   }
-  
+
   async getRepositoryByFullName(fullName: string): Promise<Repository | undefined> {
-    const result = await db.query('SELECT * FROM repositories WHERE full_name = $1', [fullName]);
-    return result.rows.length > 0 ? result.rows[0] : undefined;
+    const [repository] = await db.select().from(repositories).where(eq(repositories.fullName, fullName));
+    return repository;
   }
-  
+
   async createRepository(insertRepository: InsertRepository): Promise<Repository> {
-    const columns = Object.keys(insertRepository).map(key => 
-      key === 'fullName' ? 'full_name' : 
-      key === 'lastUpdated' ? 'last_updated' :
-      key === 'codeQuality' ? 'code_quality' :
-      key === 'testCoverage' ? 'test_coverage' :
-      key === 'issuesCount' ? 'issues_count' :
-      key === 'metaData' ? 'meta_data' :
-      key === 'fileStructure' ? 'file_structure' :
-      key === 'pullRequests' ? 'pull_requests' : key
-    ).join(', ');
-    
-    const values = Object.values(insertRepository);
-    const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
-    
-    const result = await db.query(
-      `INSERT INTO repositories (${columns}) VALUES (${placeholders}) RETURNING *`,
-      values
-    );
-    
-    return result.rows[0];
+    const [repository] = await db
+      .insert(repositories)
+      .values(insertRepository)
+      .returning();
+    return repository;
   }
-  
-  // Code Issue methods
+
+  // Code Issues operations
   async getIssuesByRepositoryId(repositoryId: number): Promise<CodeIssue[]> {
-    const result = await db.query('SELECT * FROM code_issues WHERE repository_id = $1', [repositoryId]);
-    return result.rows.map(row => ({
-      ...row,
-      repositoryId: row.repository_id,
-      filePath: row.file_path,
-      lineNumber: row.line_number,
-      issueType: row.issue_type
-    }));
+    return await db.select().from(codeIssues).where(eq(codeIssues.repositoryId, repositoryId));
   }
-  
+
   async createCodeIssue(insertIssue: InsertCodeIssue): Promise<CodeIssue> {
-    const result = await db.query(
-      `INSERT INTO code_issues (
-        repository_id, file_path, line_number, issue_type, 
-        severity, category, message, code, suggestion
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [
-        insertIssue.repositoryId, 
-        insertIssue.filePath, 
-        insertIssue.lineNumber, 
-        insertIssue.issueType,
-        insertIssue.severity, 
-        insertIssue.category, 
-        insertIssue.message, 
-        insertIssue.code, 
-        insertIssue.suggestion
-      ]
-    );
-    
-    const row = result.rows[0];
-    return {
-      ...row,
-      repositoryId: row.repository_id,
-      filePath: row.file_path,
-      lineNumber: row.line_number,
-      issueType: row.issue_type
-    };
+    const [issue] = await db
+      .insert(codeIssues)
+      .values(insertIssue)
+      .returning();
+    return issue;
   }
-  
-  // Repository File methods
+
+  // Repository Files operations
   async getFilesByRepositoryId(repositoryId: number): Promise<RepositoryFile[]> {
-    const result = await db.query('SELECT * FROM repository_files WHERE repository_id = $1', [repositoryId]);
-    return result.rows.map(row => ({
-      ...row,
-      repositoryId: row.repository_id,
-      filePath: row.file_path
-    }));
+    return await db.select().from(repositoryFiles).where(eq(repositoryFiles.repositoryId, repositoryId));
   }
-  
+
   async getFileByPath(repositoryId: number, filePath: string): Promise<RepositoryFile | undefined> {
-    const result = await db.query(
-      'SELECT * FROM repository_files WHERE repository_id = $1 AND file_path = $2',
-      [repositoryId, filePath]
-    );
-    
-    if (result.rows.length === 0) {
-      return undefined;
-    }
-    
-    const row = result.rows[0];
-    return {
-      ...row,
-      repositoryId: row.repository_id,
-      filePath: row.file_path
-    };
+    const [file] = await db
+      .select()
+      .from(repositoryFiles)
+      .where(eq(repositoryFiles.repositoryId, repositoryId))
+      .where(eq(repositoryFiles.filePath, filePath));
+    return file;
   }
-  
+
   async createRepositoryFile(insertFile: InsertRepositoryFile): Promise<RepositoryFile> {
-    const result = await db.query(
-      'INSERT INTO repository_files (repository_id, file_path, type, content, language) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [insertFile.repositoryId, insertFile.filePath, insertFile.type, insertFile.content, insertFile.language]
-    );
-    
-    const row = result.rows[0];
-    return {
-      ...row,
-      repositoryId: row.repository_id,
-      filePath: row.file_path
-    };
+    const [file] = await db
+      .insert(repositoryFiles)
+      .values(insertFile)
+      .returning();
+    return file;
   }
 }
 
-// Use DatabaseStorage instead of MemStorage
 export const storage = new DatabaseStorage();
