@@ -228,7 +228,6 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ file, issues = [], isLoading })
       const lineNumberElement = document.createElement('span');
       lineNumberElement.className = 'text-gray-500';
       lineNumberElement.textContent = lineNumber.toString();
-      //result += `<span class="text-gray-500">${lineNumber}</span> `;
 
       // Add line with highlighting if there are issues
       if (issuesOnLine.length > 0 && issuesOnLine[0] && issuesOnLine[0].issueType) {
