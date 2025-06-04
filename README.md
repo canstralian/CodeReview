@@ -2,8 +2,6 @@
 
 A Google-inspired web-based code review and debugging tool for GitHub repositories with a minimalist interface.
 
-![CodeReview AI](./docs/screenshots/app-preview.png)
-
 ## Features
 
 - **Simple, Clean Interface**: A Google-inspired minimalist design with a central search bar
