@@ -4,7 +4,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["wrangler_1", "typescript", "emacsPackages.typescript-mode"]
+packages = ["wrangler_1", "typescript", "emacsPackages.typescript-mode", "vimPlugins.typescript-tools-nvim"]
 
 [deployment]
 deploymentTarget = "autoscale"

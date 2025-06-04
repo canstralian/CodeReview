@@ -731,6 +731,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Repository endpoint for frontend compatibility
+  app.get("/api/repository", async (req, res) => {
+    try {
+      const url = req.query.url as string;
+      if (!url) {
+        return res.status(400).json({ message: "Repository URL is required" });
+      }
+      
+      // Extract owner/repo from GitHub URL
+      const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+      if (!match) {
+        return res.status(400).json({ message: "Invalid GitHub URL format. Use: https://github.com/owner/repo" });
+      }
+      
+      const [, owner, repo] = match;
+      const repository = `${owner}/${repo}`;
+      
+      // Get or create repository data
+      let repositoryData = await storage.getRepositoryByFullName(repository);
+      
+      if (!repositoryData) {
+        // Create a new repository entry with simulated data
+        const [owner, repo] = repository.split('/');
+        const newRepo = {
+          fullName: repository,
+          name: repo,
+          owner: owner,
+          description: `${repo} repository`,
+          url: `https://github.com/${repository}`,
+          visibility: "Public",
+          stars: Math.floor(Math.random() * 1000),
+          forks: Math.floor(Math.random() * 100),
+          watchers: Math.floor(Math.random() * 500),
+          issues: Math.floor(Math.random() * 50),
+          pullRequests: Math.floor(Math.random() * 20),
+          language: "JavaScript",
+          lastUpdated: new Date(),
+          codeQuality: Math.floor(Math.random() * 30) + 70,
+          testCoverage: Math.floor(Math.random() * 40) + 60,
+          issuesCount: Math.floor(Math.random() * 20) + 5,
+          metaData: {},
+          fileStructure: {}
+        };
+        
+        repositoryData = await storage.createRepository(newRepo);
+        
+        // Generate files and issues
+        await generateFiles(repositoryData.id, "app");
+        await generateIssues(repositoryData.id);
+      }
+      
+      const files = await storage.getFilesByRepositoryId(repositoryData.id);
+      const issues = await storage.getIssuesByRepositoryId(repositoryData.id);
+      
+      return res.json({
+        repository: repositoryData,
+        files,
+        issues
+      });
+    } catch (error) {
+      console.error("Error in repository endpoint:", error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+
   // Vulnerability scanning endpoint
   app.post("/api/vulnerability-scan", async (req, res) => {
     try {
@@ -903,7 +968,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error analyzing repository:", error);
       return res.status(500).json({ message: "Server error" });
     }
-  });
+  }
 
   // Compare repositories endpoint
   app.post("/api/compare-repositories", async (req, res) => {
