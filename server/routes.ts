@@ -1,55 +1,156 @@
-import type { Express, Request, Response, NextFunction } from "express";
+// src/utils/codeAnalysis.ts
+
+import type { Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { db } from "./db";
-import { sql } from "drizzle-orm";
 import axios from "axios";
 import { ZodError } from "zod";
-import { insertRepositorySchema, insertCodeIssueSchema, insertRepositoryFileSchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
+import { insertRepositorySchema, insertCodeIssueSchema, insertRepositoryFileSchema } from "@shared/schema";
 import GitHubClient from "./services/githubClient";
 
-// GitHub client instance
+// -------------------------------------------------------------------------------------
+// Interface to represent a single security issue found in code
+// -------------------------------------------------------------------------------------
+interface SecurityIssue {
+  type: "security";
+  severity: "low" | "medium" | "high" | "critical";
+  line: number;                // 1-based line number where issue was detected
+  message: string;             // Human-readable description of the issue
+  suggestion: string;          // Advice on how to fix or mitigate the issue
+  language?: string;           // (Optional) language context, e.g. 'javascript' / 'python'
+}
+
+// -------------------------------------------------------------------------------------
+// GitHub client instance (unused in this snippet but assumed to be used elsewhere).
+// -------------------------------------------------------------------------------------
 const githubClient = new GitHubClient();
 
-// Code analysis utility functions
+// -------------------------------------------------------------------------------------
+// Splits the code by newline and finds the first line index where `searchedSubstring`
+// appears. Returns a 1-based line number. If not found, returns -1.
+// -------------------------------------------------------------------------------------
+function getLineNumber(code: string, searchedSubstring: string): number {
+  const lines = code.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(searchedSubstring)) {
+      return i + 1;   // return 1-based index
+    }
+  }
+  return -1;          // substring not found
+}
+
+// -------------------------------------------------------------------------------------
+// perform a very naive language detection based on code keywords. Returns a string.
+// -------------------------------------------------------------------------------------
 function detectLanguage(code: string): string {
-  // Simple language detection based on keywords and syntax
-  if (code.includes('import React') || code.includes('useState') || code.includes('export default')) {
-    return 'javascript';
-  } else if (code.includes('def ') && code.includes(':') && (code.includes('print(') || code.includes('return '))) {
-    return 'python';
-  } else if (code.includes('public class') || code.includes('private void') || code.includes('System.out.println')) {
-    return 'java';
-  } else if (code.includes('using namespace') || code.includes('#include') || code.includes('int main()')) {
-    return 'cpp';
+  if (code.includes("import React") || code.includes("useState") || code.includes("export default")) {
+    return "javascript";
+  } else if (
+    code.includes("def ") &&
+    code.includes(":") &&
+    (code.includes("print(") || code.includes("return "))
+  ) {
+    return "python";
+  } else if (
+    code.includes("public class") ||
+    code.includes("private void") ||
+    code.includes("System.out.println")
+  ) {
+    return "java";
+  } else if (code.includes("using namespace") || code.includes("#include") || code.includes("int main()")) {
+    return "cpp";
   } else {
-    return 'unknown';
+    return "unknown";
   }
 }
 
-// Security analysis for code snippets
-function analyzeCodeSecurity(code: string, language: string): Array<any> {
-  const securityIssues = [];
+// -------------------------------------------------------------------------------------
+// analyzeCodeSecurity
+//   - code: full source code as a string (with newlines, etc.)
+//   - language: the detected or declared language (e.g. 'javascript', 'python')
+// 
+// Returns an array of SecurityIssue objects for each finding.
+// -------------------------------------------------------------------------------------
+function analyzeCodeSecurity(code: string, language: string): SecurityIssue[] {
+  const securityIssues: SecurityIssue[] = [];
 
-  // Common security issues across languages
-  if (code.includes('eval(') || code.includes('exec(')) {
+  // -----------------------------------------------------
+  // 1) eval()/exec() detection → high severity
+  // -----------------------------------------------------
+  if (code.includes("eval(") || code.includes("exec(")) {
+    const substring = code.includes("eval(") ? "eval(" : "exec(";
     securityIssues.push({
-      type: 'security',
-      severity: 'high',
-      line: getLineNumber(code, 'eval('),
-      message: 'Use of eval() or exec() can lead to code injection vulnerabilities',
-      suggestion: 'Avoid using eval() or exec(). Use safer alternatives for dynamic code execution.'
+      type: "security",
+      severity: "high",
+      line: getLineNumber(code, substring),
+      message: "Use of eval() or exec() can lead to code injection vulnerabilities.",
+      suggestion: "Avoid using eval() or exec(). Use safer alternatives (e.g., Function constructor, sandboxed VMs).",
+      language,
     });
   }
 
-  if (code.match(/password\s*=\s*['"][^'"]+['"]/) || code.match(/api[_-]?key\s*=\s*['"][^'"]+['"]/) || code.match(/secret\s*=\s*['"][^'"]+['"]/) || code.match(/token\s*=\s*['"][^'"]+['"]/)) {
+  // -----------------------------------------------------
+  // 2) Hardcoded credentials detection → critical severity
+  // -----------------------------------------------------
+  //    We look for patterns like `password = "..."`, `api_key = '...'`, `secret = "..."`, `token = "..."`.
+  const credentialRegex = /(?:password|api[_-]?key|secret|token)\s*=\s*['"][^'"]+['"]/i;
+  if (credentialRegex.test(code)) {
+    // Find whichever keyword appears first to get a line number
+    const match = code.match(/password\s*=\s*['"][^'"]+['"]/) ||
+                  code.match(/api[_-]?key\s*=\s*['"][^'"]+['"]/) ||
+                  code.match(/secret\s*=\s*['"][^'"]+['"]/) ||
+                  code.match(/token\s*=\s*['"][^'"]+['"]/);
+    
+    // If we matched something, figure out which substring to search for line number.
+    let searchKey = "";
+    if (match) {
+      const matchedText = match[0];
+      // Extract the key name out of the matched text:
+      if (/password\s*=/.test(matchedText)) {
+        searchKey = "password";
+      } else if (/api[_-]?key\s*=/.test(matchedText)) {
+        searchKey = matchedText.split("=")[0].trim(); // e.g. "api_key" or "api-key"
+      } else if (/secret\s*=/.test(matchedText)) {
+        searchKey = "secret";
+      } else if (/token\s*=/.test(matchedText)) {
+        searchKey = "token";
+      }
+    }
+
     securityIssues.push({
-      type: 'security',
-      severity: 'critical',
-      line: getLineNumber(code, 'password'),
-      message: 'Hardcoded credentials detected in source code',
-      suggestion: 'Never hardcode credentials in source code. Use environment variables or a secure vault service.'
+      type: "security",
+      severity: "critical",
+      line: searchKey ? getLineNumber(code, searchKey) : -1,
+      message: "Hardcoded credentials detected in source code.",
+      suggestion: "Never hardcode credentials in source code. Use environment variables or a secrets manager.",
+      language,
+    });
+  }
+
+  // -----------------------------------------------------
+  // 3) (Optional) Future: add other checks per language
+  //    e.g. SQL injection patterns in JS, XSS checks, etc.
+  // -----------------------------------------------------
+  // if (language === 'javascript') { ... }
+  // else if (language === 'python') { ... }
+
+  // Finally, return whatever issues we found (could be an empty array).
+  return securityIssues;
+}
+
+// -------------------------------------------------------------------------------------
+// Example usage (for manual testing):
+// -------------------------------------------------------------------------------------
+// const sampleJs = `
+//   const password = "hunter2";
+//   eval("console.log('insecure')");
+// `;
+// console.log(analyzeCodeSecurity(sampleJs, detectLanguage(sampleJs)));
+
+// -------------------------------------------------------------------------------------
+// Export anything else you need in this module
+// -------------------------------------------------------------------------------------
+export { detectLanguage, analyzeCodeSecurity, getLineNumber };
     });
   }
 
