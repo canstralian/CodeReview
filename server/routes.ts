@@ -969,7 +969,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error analyzing repository:", error);
       return res.status(500).json({ message: "Server error" });
     }
-  }
+  });
 
   // Compare repositories endpoint
   app.post("/api/compare-repositories", async (req, res) => {
