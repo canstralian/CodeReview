@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "web", "postgresql-16", "replit-rtld-loader", "typescript-language-server"]
+modules = ["nodejs-20", "web"]
 run = "npm run dev"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
@@ -8,8 +8,7 @@ packages = ["wrangler_1", "typescript", "emacsPackages.typescript-mode", "vimPlu
 
 [deployment]
 deploymentTarget = "autoscale"
-build = ["npm", "run", "build"]
-run = ["npm", "run", "start"]
+run = ["sh", "-c", "npm run dev"]
 
 [workflows]
 runButton = "Project"

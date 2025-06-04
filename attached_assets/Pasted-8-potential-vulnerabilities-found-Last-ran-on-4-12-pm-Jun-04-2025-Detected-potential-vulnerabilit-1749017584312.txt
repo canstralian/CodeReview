@@ -1,0 +1,39 @@
+8 potential vulnerabilities found.
+Last ran on 4:12 pm, Jun 04, 2025
+Detected potential vulnerability in server/routes.ts.backup
+A gitleaks generic-api-key was detected which attempts to identify hard-coded credentials. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module). This rule can introduce a lot of false positives, it is not recommended to be used in PR comments.
+server/routes.ts.backup
+            code: "const apiKey = 'a1b2c3d4e5f6';",
+Detected potential vulnerability in server/routes.ts.backup
+A gitleaks hashicorp-tf-password was detected which attempts to identify hard-coded credentials. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module).
+server/routes.ts.backup
+            password: "password123"
+          });
+Detected potential vulnerability in server/routes.ts.backup2
+A gitleaks generic-api-key was detected which attempts to identify hard-coded credentials. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module). This rule can introduce a lot of false positives, it is not recommended to be used in PR comments.
+server/routes.ts.backup2
+            code: "const apiKey = 'a1b2c3d4e5f6';",
+Detected potential vulnerability in server/routes.ts.backup2
+A gitleaks hashicorp-tf-password was detected which attempts to identify hard-coded credentials. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module).
+server/routes.ts.backup2
+            password: "password123"
+          });
+Detected potential vulnerability in server/routes.ts.broken
+A gitleaks generic-api-key was detected which attempts to identify hard-coded credentials. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module). This rule can introduce a lot of false positives, it is not recommended to be used in PR comments.
+server/routes.ts.broken
+            code: "const apiKey = 'a1b2c3d4e5f6';",
+Detected potential vulnerability in server/routes.ts.broken
+A gitleaks hashicorp-tf-password was detected which attempts to identify hard-coded credentials. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module).
+server/routes.ts.broken
+            password: "password123"
+          });
+Detected potential vulnerability in server/routes.ts.full
+A gitleaks generic-api-key was detected which attempts to identify hard-coded credentials. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module). This rule can introduce a lot of false positives, it is not recommended to be used in PR comments.
+server/routes.ts.full
+            code: "const apiKey = 'a1b2c3d4e5f6';",
+Detected potential vulnerability in server/routes.ts.full
+A gitleaks hashicorp-tf-password was detected which attempts to identify hard-coded credentials. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module).
+server/routes.ts.full
+            password: "password123"
+          });
+This security scan is powered by Semgrep Community Edition.
