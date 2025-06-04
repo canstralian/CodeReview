@@ -88,11 +88,8 @@ async function main() {
     
     console.log("Schema push completed successfully!");
     await client.end();
-    process.exit(0);
   } catch (error) {
     console.error("Error pushing schema:", error);
     process.exit(1);
   }
 }
-
-main();

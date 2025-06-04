@@ -1,10 +1,10 @@
-modules = ["nodejs-20", "web", "postgresql-16"]
+modules = ["nodejs-20", "web", "postgresql-16", "replit-rtld-loader", "typescript-language-server"]
 run = "npm run dev"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["wrangler_1"]
+packages = ["wrangler_1", "typescript", "emacsPackages.typescript-mode"]
 
 [deployment]
 deploymentTarget = "autoscale"
