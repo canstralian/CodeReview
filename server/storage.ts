@@ -13,7 +13,7 @@ import {
   type InsertRepositoryFile,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 // Interface for storage operations
 export interface IStorage {
