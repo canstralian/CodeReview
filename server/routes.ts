@@ -2,6 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
+import { sql } from "drizzle-orm";
 import axios from "axios";
 import { ZodError } from "zod";
 import { insertRepositorySchema, insertCodeIssueSchema, insertRepositoryFileSchema } from "@shared/schema";
@@ -648,7 +649,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Database health check
   app.get("/api/db-health", async (req, res) => {
     try {
-      const result = await db.query("SELECT NOW()");
+      const result = await db.execute(sql`SELECT NOW()`);
       res.json({ 
         status: "ok", 
         timestamp: result.rows[0].now,
