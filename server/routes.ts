@@ -136,7 +136,7 @@ function analyzeCodeQuality(code: string, language: string): Array<any> {
         suggestion: 'Use const or let instead of var for better scoping'
       });
     }
-    
+
     if (code.match(/==(?!=)/)) {
       qualityIssues.push({
         type: 'quality',
@@ -177,7 +177,7 @@ function analyzePerformance(code: string, language: string): Array<any> {
         suggestion: 'Cache DOM selections outside of loops to avoid repeated DOM queries'
       });
     }
-    
+
     if (code.includes('.forEach(') && (code.includes('.map(') || code.includes('.filter('))) {
       performanceIssues.push({
         type: 'performance',
@@ -205,7 +205,7 @@ function analyzePerformance(code: string, language: string): Array<any> {
 // Utility function to get line number of a pattern in code
 function getLineNumber(code: string, searchTerm: string): number {
   if (!code || !searchTerm || !code.includes(searchTerm)) return 1;
-  
+
   try {
     const lines = code.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -222,7 +222,7 @@ function getLineNumber(code: string, searchTerm: string): number {
 // Calculate security score based on issues
 function calculateSecurityScore(issues: Array<any>): number {
   if (!issues || issues.length === 0) return 100;
-  
+
   let score = 100;
   for (const issue of issues) {
     if (issue.severity === 'critical') {
@@ -235,14 +235,14 @@ function calculateSecurityScore(issues: Array<any>): number {
       score -= 5;
     }
   }
-  
+
   return Math.max(0, score);
 }
 
 // Calculate code quality score based on issues
 function calculateQualityScore(issues: Array<any>): number {
   if (!issues || issues.length === 0) return 100;
-  
+
   let score = 100;
   for (const issue of issues) {
     if (issue.severity === 'high') {
@@ -253,14 +253,14 @@ function calculateQualityScore(issues: Array<any>): number {
       score -= 5;
     }
   }
-  
+
   return Math.max(0, score);
 }
 
 // Calculate performance score based on issues
 function calculatePerformanceScore(issues: Array<any>): number {
   if (!issues || issues.length === 0) return 100;
-  
+
   let score = 100;
   for (const issue of issues) {
     if (issue.severity === 'high') {
@@ -271,61 +271,61 @@ function calculatePerformanceScore(issues: Array<any>): number {
       score -= 5;
     }
   }
-  
+
   return Math.max(0, score);
 }
 
 // Generate recommendations based on issues
 function generateRecommendations(securityIssues: Array<any>, qualityIssues: Array<any>, performanceIssues: Array<any>): Array<string> {
   const recommendations = [];
-  
+
   // Add security recommendations
   if (securityIssues.length > 0) {
     recommendations.push("Address security vulnerabilities to prevent potential attacks");
-    
+
     if (securityIssues.some(issue => issue.message.includes('SQL injection'))) {
       recommendations.push("Implement parameterized queries to prevent SQL injection attacks");
     }
-    
+
     if (securityIssues.some(issue => issue.message.includes('XSS'))) {
       recommendations.push("Sanitize user input to prevent cross-site scripting (XSS) attacks");
     }
-    
+
     if (securityIssues.some(issue => issue.message.includes('credentials'))) {
       recommendations.push("Use environment variables or a secure vault service for storing sensitive credentials");
     }
   }
-  
+
   // Add code quality recommendations
   if (qualityIssues.length > 0) {
     recommendations.push("Improve code quality to enhance maintainability");
-    
+
     if (qualityIssues.some(issue => issue.message.includes('too long'))) {
       recommendations.push("Break down large functions into smaller, more manageable pieces");
     }
-    
+
     if (qualityIssues.some(issue => issue.message.includes('var keyword'))) {
       recommendations.push("Replace 'var' with 'const' or 'let' for better variable scoping");
     }
-    
+
     if (qualityIssues.some(issue => issue.message.includes('TODO'))) {
       recommendations.push("Resolve TODO comments to complete implementation");
     }
   }
-  
+
   // Add performance recommendations
   if (performanceIssues.length > 0) {
     recommendations.push("Optimize code for better performance");
-    
+
     if (performanceIssues.some(issue => issue.message.includes('DOM query'))) {
       recommendations.push("Cache DOM selections outside of loops to reduce DOM queries");
     }
-    
+
     if (performanceIssues.some(issue => issue.message.includes('array length'))) {
       recommendations.push("Cache array lengths outside of loops for better performance");
     }
   }
-  
+
   return recommendations;
 }
 
@@ -333,7 +333,7 @@ function generateRecommendations(securityIssues: Array<any>, qualityIssues: Arra
 async function scanDependencies(repo: string, branch?: string): Promise<Array<any>> {
   // Simulate dependency scanning
   console.log(`Scanning dependencies for ${repo}${branch ? ` on branch ${branch}` : ''}`);
-  
+
   // For demonstration, return simulated results
   return [
     {
@@ -368,7 +368,7 @@ async function scanDependencies(repo: string, branch?: string): Promise<Array<an
 async function scanForSecrets(repo: string, branch?: string): Promise<Array<any>> {
   // Simulate secret scanning
   console.log(`Scanning for secrets in ${repo}${branch ? ` on branch ${branch}` : ''}`);
-  
+
   // For demonstration, return simulated results
   return [
     {
@@ -393,7 +393,7 @@ async function scanForSecrets(repo: string, branch?: string): Promise<Array<any>
 async function performSASTScan(repo: string, branch?: string): Promise<Array<any>> {
   // Simulate static application security testing
   console.log(`Performing SAST scan on ${repo}${branch ? ` on branch ${branch}` : ''}`);
-  
+
   // For demonstration, return simulated results
   return [
     {
@@ -426,7 +426,7 @@ async function performSASTScan(repo: string, branch?: string): Promise<Array<any
 // Generate security recommendations based on vulnerabilities
 function generateSecurityRecommendations(vulnerabilities: Array<any>): Array<string> {
   const recommendations = [];
-  
+
   // Count vulnerability types
   const counts = {
     critical: 0,
@@ -434,42 +434,42 @@ function generateSecurityRecommendations(vulnerabilities: Array<any>): Array<str
     medium: 0,
     low: 0
   };
-  
+
   vulnerabilities.forEach(vuln => {
     if (vuln.severity in counts) {
       counts[vuln.severity as keyof typeof counts]++;
     }
   });
-  
+
   // Generate general recommendations based on severity counts
   if (counts.critical > 0) {
     recommendations.push(`Address ${counts.critical} critical vulnerabilities immediately to prevent security breaches`);
   }
-  
+
   if (counts.high > 0) {
     recommendations.push(`Resolve ${counts.high} high-severity security issues as part of the next sprint`);
   }
-  
+
   if (counts.medium > 0) {
     recommendations.push(`Plan to fix ${counts.medium} medium-severity security issues in the near future`);
   }
-  
+
   // Add specific recommendations based on vulnerability types
   const hasSecrets = vulnerabilities.some(v => v.type === "API Key" || v.type === "Database Password");
   if (hasSecrets) {
     recommendations.push("Remove hardcoded secrets from the codebase and use environment variables or a secure vault");
   }
-  
+
   const hasDependencyIssues = vulnerabilities.some(v => v.name);
   if (hasDependencyIssues) {
     recommendations.push("Update vulnerable dependencies to their latest secure versions");
   }
-  
+
   const hasAuthIssues = vulnerabilities.some(v => v.type === "Insecure Authentication");
   if (hasAuthIssues) {
     recommendations.push("Improve authentication mechanisms using industry-standard practices");
   }
-  
+
   return recommendations;
 }
 
@@ -490,51 +490,51 @@ function generateSecurityMonitoringData(timeRange: string): any {
     attack_types: {},
     source_ips: {}
   };
-  
+
   // Generate different data based on time range
   let days = 1;
   if (timeRange === '7d') days = 7;
   else if (timeRange === '30d') days = 30;
   else if (timeRange === '90d') days = 90;
-  
+
   // Generate random number of events based on time range
   const totalEvents = Math.floor(Math.random() * 100 * days);
   data.summary.total_events = totalEvents;
-  
+
   // Distribute events by severity
   data.summary.critical = Math.floor(totalEvents * 0.1);
   data.summary.high = Math.floor(totalEvents * 0.2);
   data.summary.medium = Math.floor(totalEvents * 0.3);
   data.summary.low = totalEvents - data.summary.critical - data.summary.high - data.summary.medium;
-  
+
   // Generate timeline data
   const attackTypes = ['SQL Injection', 'XSS', 'Brute Force', 'CSRF', 'Path Traversal'];
   const sourceIPs = ['192.168.1.1', '10.0.0.1', '172.16.0.1', '8.8.8.8', '1.1.1.1'];
-  
+
   // Initialize attack types and source IPs counters
   attackTypes.forEach(type => {
     (data.attack_types as Record<string, number>)[type] = 0;
   });
-  
+
   sourceIPs.forEach(ip => {
     (data.source_ips as Record<string, number>)[ip] = 0;
   });
-  
+
   // Generate timeline events
   for (let i = 0; i < days; i++) {
     const date = new Date(now);
     date.setDate(date.getDate() - i);
-    
+
     const dailyEvents = Math.floor(totalEvents / days) + Math.floor(Math.random() * 10) - 5;
-    
+
     // Distribute events by attack type and source IP
     for (let j = 0; j < dailyEvents; j++) {
       const attackType = attackTypes[Math.floor(Math.random() * attackTypes.length)];
       const sourceIP = sourceIPs[Math.floor(Math.random() * sourceIPs.length)];
-      
+
       (data.attack_types as Record<string, number>)[attackType]++;
       (data.source_ips as Record<string, number>)[sourceIP]++;
-      
+
       (data.timeline as Array<any>).push({
         timestamp: date.toISOString(),
         type: attackType,
@@ -543,7 +543,7 @@ function generateSecurityMonitoringData(timeRange: string): any {
       });
     }
   }
-  
+
   return data;
 }
 
@@ -583,7 +583,7 @@ function getLanguageFromPath(path: string): string | null {
     'zsh': 'shell',
     'fish': 'shell'
   };
-  
+
   return extension ? languageMap[extension] || null : null;
 }
 
@@ -592,11 +592,11 @@ async function generateRealFiles(repositoryId: number, owner: string, repo: stri
   try {
     // Get repository contents from GitHub
     const contents = await githubClient.getRepositoryContents(owner, repo);
-    
+
     // Process and store files
     for (const item of contents) {
       const language = getLanguageFromPath(item.path);
-      
+
       await storage.createRepositoryFile({
         repositoryId,
         filePath: item.path,
@@ -605,7 +605,7 @@ async function generateRealFiles(repositoryId: number, owner: string, repo: stri
         content: null // We'll fetch content on demand
       });
     }
-    
+
     // If it's a directory, recursively fetch subdirectories (limited depth for performance)
     const directories = contents.filter(item => item.type === 'dir').slice(0, 5); // Limit to 5 directories
     for (const dir of directories) {
@@ -613,7 +613,7 @@ async function generateRealFiles(repositoryId: number, owner: string, repo: stri
         const subContents = await githubClient.getRepositoryContents(owner, repo, dir.path);
         for (const subItem of subContents.slice(0, 10)) { // Limit files per directory
           const language = getLanguageFromPath(subItem.path);
-          
+
           await storage.createRepositoryFile({
             repositoryId,
             filePath: subItem.path,
@@ -639,12 +639,12 @@ async function generateRealFiles(repositoryId: number, owner: string, repo: stri
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
-  
+
   // Health check endpoint
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
   });
-  
+
   // Database health check
   app.get("/api/db-health", async (req, res) => {
     try {
@@ -662,35 +662,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
-  
+
   // Code analysis endpoint
   app.post("/api/analyze-code", (req, res) => {
     try {
       const { code, language } = req.body;
-      
+
       if (!code || typeof code !== 'string') {
         return res.status(400).json({ message: "Code is required and must be a string" });
       }
-      
+
       if (code.length > 50000) {
         return res.status(400).json({ message: "Code is too large. Maximum size is 50KB" });
       }
-      
+
       const detectedLanguage = language || detectLanguage(code);
-      
+
       // Analyze code for security, quality, and performance issues
       const securityIssues = analyzeCodeSecurity(code, detectedLanguage);
       const qualityIssues = analyzeCodeQuality(code, detectedLanguage);
       const performanceIssues = analyzePerformance(code, detectedLanguage);
-      
+
       // Calculate scores
       const securityScore = calculateSecurityScore(securityIssues);
       const qualityScore = calculateQualityScore(qualityIssues);
       const performanceScore = calculatePerformanceScore(performanceIssues);
-      
+
       // Generate recommendations
       const recommendations = generateRecommendations(securityIssues, qualityIssues, performanceIssues);
-      
+
       return res.json({
         language: detectedLanguage,
         scores: {
@@ -712,46 +712,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: "Server error" });
     }
   });
-  
+
   // Security monitoring endpoint
   app.get("/api/security-monitoring", (req, res) => {
     try {
       const { timeRange = '7d' } = req.query;
-      
+
       if (!['1d', '7d', '30d', '90d'].includes(timeRange as string)) {
         return res.status(400).json({ message: "Invalid time range. Supported values: 1d, 7d, 30d, 90d" });
       }
-      
+
       const monitoringData = generateSecurityMonitoringData(timeRange as string);
-      
+
       return res.json(monitoringData);
     } catch (error) {
       console.error("Error generating security monitoring data:", error);
       return res.status(500).json({ message: "Server error" });
     }
   });
-  
+
   // Vulnerability scanning endpoint
   app.post("/api/vulnerability-scan", async (req, res) => {
     try {
       const { repository, branch } = req.body;
-      
+
       if (!repository) {
         return res.status(400).json({ message: "Repository name is required" });
       }
-      
+
       // Perform different types of scans
       const dependencyResults = await scanDependencies(repository, branch);
       const secretResults = await scanForSecrets(repository, branch);
       const sastResults = await performSASTScan(repository, branch);
-      
+
       // Combine all vulnerabilities
       const allVulnerabilities = [
         ...dependencyResults.flatMap(dep => dep.vulnerabilities?.map((v: any) => ({ ...v, source: 'dependency', dependency: dep.name })) || []),
         ...secretResults.map(s => ({ ...s, source: 'secret' })),
         ...sastResults.map(s => ({ ...s, source: 'sast' }))
       ];
-      
+
       // Count vulnerabilities by severity
       const vulnerabilityCounts = {
         total: allVulnerabilities.length,
@@ -760,7 +760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         medium: allVulnerabilities.filter(v => v.severity === 'medium').length,
         low: allVulnerabilities.filter(v => v.severity === 'low').length
       };
-      
+
       // Generate overall security score
       const securityScore = Math.max(0, 100 - 
         (vulnerabilityCounts.critical * 25) - 
@@ -768,10 +768,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         (vulnerabilityCounts.medium * 5) - 
         (vulnerabilityCounts.low * 2)
       );
-      
+
       // Generate recommendations
       const recommendations = generateSecurityRecommendations(allVulnerabilities);
-      
+
       return res.json({
         repository,
         branch: branch || 'main',
@@ -790,46 +790,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: "Server error" });
     }
   });
-  
+
   // Analyze GitHub repository
   app.post("/api/analyze-repository", async (req, res) => {
     try {
       const { repository } = req.body;
-      
+
       if (!repository || typeof repository !== 'string') {
         return res.status(400).json({ message: "Repository name is required and must be a string" });
       }
-      
+
       // Enhanced input validation for security
       if (repository.length > 200) {
         return res.status(400).json({ message: "Repository name is too long" });
       }
-      
+
       // Sanitize input - remove any potentially dangerous characters
       const sanitizedRepo = repository.trim().replace(/[^a-zA-Z0-9\-_./]/g, '');
-      
+
       // Validate repository format (owner/repo)
       const repoParts = sanitizedRepo.split('/');
       if (repoParts.length !== 2 || !repoParts[0] || !repoParts[1]) {
         return res.status(400).json({ message: "Repository must be in format 'owner/repo'" });
       }
-      
+
       // Additional validation for owner and repo names
       const [owner, repo] = repoParts;
       if (owner.length > 100 || repo.length > 100) {
         return res.status(400).json({ message: "Owner or repository name is too long" });
       }
       const fullName = `${owner}/${repo}`;
-      
+
       let repositoryData = await storage.getRepositoryByFullName(fullName);
-      
+
       if (!repositoryData) {
         try {
           // Try to fetch from GitHub using the new client
           if (githubClient.hasAuthentication()) {
             try {
               const githubRepo = await githubClient.getRepository(owner, repo);
-              
+
               // Create repository in our database using real GitHub data
               const newRepo = {
                 fullName: githubRepo.full_name,
@@ -851,22 +851,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 metaData: githubRepo,
                 fileStructure: {}
               };
-              
+
               repositoryData = await storage.createRepository(newRepo);
-              
+
               // Fetch real repository structure
               await generateRealFiles(repositoryData.id, owner, repo);
             } catch (githubError) {
               console.error("Error fetching from GitHub:", githubError);
-              throw new Error("Failed to fetch repository from GitHub. Please ensure the repository exists and is accessible.");
+              throw new Error("Failed to fetch repository from GitHub. Please ensure the repository exists and isaccessible.");
             }
           } else {
             throw new Error("GitHub authentication required. Please provide a valid GitHub token to access repository data.");
           }
-          
+
           // Generate code issues for the repository
           await generateIssues(repositoryData.id);
-          
+
         } catch (error) {
           console.error("Error creating repository:", error);
           if (error instanceof Error) {
@@ -875,13 +875,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(500).json({ message: "Failed to analyze repository" });
         }
       }
-      
+
       // Get repository files and issues with error handling
       let files, issues;
       try {
         files = await storage.getFilesByRepositoryId(repositoryData.id);
         issues = await storage.getIssuesByRepositoryId(repositoryData.id);
-        
+
         // Limit results to prevent memory issues
         if (files.length > 1000) {
           files = files.slice(0, 1000);
@@ -893,7 +893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Database error fetching files/issues:", dbError);
         return res.status(500).json({ message: "Failed to retrieve repository data" });
       }
-      
+
       return res.json({
         repository: repositoryData,
         files,
@@ -904,26 +904,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: "Server error" });
     }
   });
-  
+
   // Compare repositories endpoint
   app.post("/api/compare-repositories", async (req, res) => {
     try {
       const { repositoryIds } = req.body;
-      
+
       if (!repositoryIds || !Array.isArray(repositoryIds) || repositoryIds.length < 2) {
         return res.status(400).json({ message: "At least two repository IDs are required" });
       }
-      
+
       // Validate that all IDs are numbers
       if (!repositoryIds.every(id => typeof id === 'number' && id > 0)) {
         return res.status(400).json({ message: "All repository IDs must be positive numbers" });
       }
-      
+
       // Limit the number of repositories to prevent memory issues
       if (repositoryIds.length > 10) {
         return res.status(400).json({ message: "Cannot compare more than 10 repositories at once" });
       }
-      
+
       // Get repositories with their files
       const repositories = [];
       for (const id of repositoryIds) {
@@ -934,21 +934,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             repositories.push({ ...repository, files });
           }
         } catch (error) {
-          console.error(`Error fetching repository ${id}:`, error);
+          console.error('Error fetching repository id:', error);
           // Continue with other repositories instead of failing completely
         }
       }
-      
+
       if (repositories.length < 2) {
         return res.status(404).json({ message: "Not enough valid repositories found" });
       }
-      
+
       // Find overlaps between repositories
       const overlaps = findRepositoryOverlaps(repositories);
-      
+
       // Calculate project overview
       const projectOverview = calculateProjectOverview(repositories);
-      
+
       return res.json({
         overlaps,
         projectOverview
@@ -963,18 +963,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/file-content", async (req, res) => {
     try {
       const { owner, repo, path } = req.query;
-      
+
       if (!owner || !repo || !path) {
         return res.status(400).json({ message: "Owner, repo, and path are required" });
       }
-      
+
       if (typeof owner !== 'string' || typeof repo !== 'string' || typeof path !== 'string') {
         return res.status(400).json({ message: "Parameters must be strings" });
       }
-      
+
       try {
         const content = await githubClient.getFileContent(owner, repo, path);
-        
+
         return res.json({
           path,
           content,
@@ -989,39 +989,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: "Server error" });
     }
   });
-  
+
   // Scan all repositories
   app.get("/api/scan-repositories", async (req, res) => {
     try {
       const { username } = req.query;
-      
+
       if (!username || typeof username !== "string") {
         return res.status(400).json({ message: "GitHub username is required" });
       }
-      
+
       // Validate username format (basic security check)
       if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
         return res.status(400).json({ message: "Invalid username format" });
       }
-      
+
       console.log(`Scanning repositories for user: ${username}`);
-      
+
       // Generate simulated repositories for the user
       const repoTypes = [
         "website", "app", "api", "ui-components", 
         "docs", "utils", "mobile", "server"
       ];
-      
+
       // Create simulated repositories
       const repositories = [];
-      
+
       for (let i = 0; i < repoTypes.length; i++) {
         const repoName = repoTypes[i];
         const fullName = `${username}/${repoName}`;
-        
+
         // Check if repository exists in storage
         let repository = await storage.getRepositoryByFullName(fullName);
-        
+
         if (!repository) {
           // Create repository in database
           const newRepo = {
@@ -1044,20 +1044,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             metaData: {},
             fileStructure: {}
           };
-          
+
           repository = await storage.createRepository(newRepo);
           console.log(`Created repository: ${repository.name}`);
-          
+
           // Generate simulated files
           await generateFiles(repository.id, repoName);
-          
+
           // Generate code issues
           await generateIssues(repository.id);
         }
-        
+
         repositories.push(repository);
       }
-      
+
       // Get files for each repository
       const reposWithFiles = await Promise.all(
         repositories.map(async (repo) => {
@@ -1065,11 +1065,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return { ...repo, files };
         })
       );
-      
+
       // Find overlaps between repositories
       const overlaps = findRepositoryOverlaps(reposWithFiles);
       const projectOverview = calculateProjectOverview(reposWithFiles);
-      
+
       return res.json({
         overlaps,
         projectOverview
@@ -1141,15 +1141,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "middleware/auth.js"
       ]
     };
-    
+
     // Get file structure for this repo type
     const files = fileStructures[repoType] || fileStructures["app"];
-    
+
     // Create files in database
     for (const filePath of files) {
       const type = filePath.includes(".") ? "file" : "dir";
       const language = getLanguageFromPath(filePath);
-      
+
       await storage.createRepositoryFile({
         repositoryId,
         filePath,
@@ -1159,26 +1159,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   }
-  
 
-  
+
+
   // Generate code issues for a repository
   async function generateIssues(repositoryId: number) {
     // Get files for the repository
     const files = await storage.getFilesByRepositoryId(repositoryId);
-    
+
     // Generate random issues for each file
     for (const file of files) {
       if (file.type === "file") {
         // Only generate issues for actual files (not directories)
         const issueCount = Math.floor(Math.random() * 3); // 0-2 issues per file
-        
+
         for (let i = 0; i < issueCount; i++) {
           // Generate a random issue
           const issueTypes = ["bug", "warning", "info"];
           const severities = ["high", "medium", "low"];
           const categories = ["security", "performance", "codeQuality", "accessibility"];
-          
+
           const issue = {
             repositoryId: file.repositoryId,
             filePath: file.filePath,
@@ -1190,31 +1190,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
             code: `Sample code from line ${Math.floor(Math.random() * 100) + 1}`,
             suggestion: `Consider refactoring this code to improve ${categories[Math.floor(Math.random() * categories.length)]}`
           };
-          
+
           await storage.createCodeIssue(issue);
         }
       }
     }
   }
-  
+
   // Find overlaps between repositories
   function findRepositoryOverlaps(reposWithFiles: any[]) {
     const overlaps = [];
-    
+
     // Compare each repository with every other repository
     for (let i = 0; i < reposWithFiles.length; i++) {
       for (let j = i + 1; j < reposWithFiles.length; j++) {
         const repo1 = reposWithFiles[i];
         const repo2 = reposWithFiles[j];
-        
+
         // Find similar files between the two repositories
         const similarFiles = [];
-        
+
         for (const file1 of repo1.files) {
           for (const file2 of repo2.files) {
             // Calculate similarity based on file path and type
             const similarity = calculateFileSimilarity(file1, file2);
-            
+
             if (similarity > 0.5) {
               similarFiles.push({
                 file1: {
@@ -1232,7 +1232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         }
-        
+
         // Only add overlaps if there are similar files
         if (similarFiles.length > 0) {
           overlaps.push({
@@ -1247,54 +1247,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
     }
-    
+
     return overlaps;
   }
-  
+
   // Calculate similarity between two files
   function calculateFileSimilarity(file1: any, file2: any) {
     // Simple similarity calculation based on file path
     if (file1.filePath === file2.filePath) {
       return 1.0;
     }
-    
+
     // Check if the file names are the same
     const fileName1 = file1.filePath.split('/').pop();
     const fileName2 = file2.filePath.split('/').pop();
-    
+
     if (fileName1 === fileName2) {
       return 0.8;
     }
-    
+
     // Check if the file extensions are the same
     const ext1 = fileName1?.includes('.') ? fileName1.split('.').pop() : null;
     const ext2 = fileName2?.includes('.') ? fileName2.split('.').pop() : null;
-    
+
     if (ext1 && ext2 && ext1 === ext2) {
       return 0.6;
     }
-    
+
     // Check if the file languages are the same
     if (file1.language && file2.language && file1.language === file2.language) {
       return 0.5;
     }
-    
+
     // Check if the directories are similar
     const dir1 = file1.filePath.includes('/') ? file1.filePath.split('/').slice(0, -1).join('/') : null;
     const dir2 = file2.filePath.includes('/') ? file2.filePath.split('/').slice(0, -1).join('/') : null;
-    
+
     if (dir1 && dir2 && dir1 === dir2) {
       return 0.7;
     }
-    
+
     return 0.3;
   }
-  
+
   // Generate a description for the overlap
   function generateOverlapDescription(repo1: any, repo2: any, similarFiles: any[]) {
     return `Found ${similarFiles.length} similar files between ${repo1.name} and ${repo2.name}. These repositories appear to have overlapping functionality.`;
   }
-  
+
   // Generate a merge recommendation
   function generateMergeRecommendation(repo1: any, repo2: any, similarFiles: any[]) {
     if (similarFiles.length > 3) {
@@ -1303,7 +1303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return `Consider extracting common functionality into a shared library used by both ${repo1.name} and ${repo2.name}.`;
     }
   }
-  
+
   // Calculate project overview
   function calculateProjectOverview(reposWithFiles: any[]) {
     // Calculate total repositories and files
@@ -1311,20 +1311,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let totalFiles = 0;
     const languageCounts: Record<string, number> = {};
     let duplicateCount = 0;
-    
+
     // Create a map of file paths to count duplicates
     const filePaths = new Map();
-    
+
     // Process all files in all repositories
     for (const repo of reposWithFiles) {
       for (const file of repo.files) {
         totalFiles++;
-        
+
         // Count by language
         if (file.language) {
           languageCounts[file.language] = (languageCounts[file.language] || 0) + 1;
         }
-        
+
         // Check for duplicates
         if (file.type === "file") {
           const filePath = file.filePath;
@@ -1336,10 +1336,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
     }
-    
+
     // Calculate duplicate percentage
     const duplicatePercentage = totalFiles > 0 ? (duplicateCount / totalFiles) * 100 : 0;
-    
+
     return {
       totalRepositories,
       totalFiles,
@@ -1347,6 +1347,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       duplicateCodePercentage: Math.round(duplicatePercentage * 10) / 10
     };
   }
-  
+
   return httpServer;
 }
