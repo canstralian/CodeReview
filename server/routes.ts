@@ -729,7 +729,7 @@ async function generateRealFiles(repositoryId: number, owner: string, repo: stri
       }
     }
   } catch (error) {
-    console.error(`Error fetching real files for ${owner}/${repo}:`, error);
+    console.error("Error fetching real files for repository:", { owner, repo, error });
     // Fall back to generating sample files - using the repo name as type
     const repoTypes = ["website", "app", "api", "ui-components", "docs", "utils", "mobile", "server"];
     const repoType = repoTypes.find(type => repo.toLowerCase().includes(type)) || "app";
@@ -979,6 +979,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const repoParts = sanitizedRepo.split('/');
       if (repoParts.length !== 2 || !repoParts[0] || !repoParts[1]) {
         return res.status(400).json({ message: "Repository must be in format 'owner/repo'" });
+      }
+
+      // Validate GitHub username/repo name constraints
+      const [owner, repo] = repoParts;
+      const validNamePattern = /^[a-zA-Z0-9._-]+$/;
+      if (!validNamePattern.test(owner) || !validNamePattern.test(repo)) {
+        return res.status(400).json({ message: "Invalid characters in repository owner or name" });
       }
 
       // Additional validation for owner and repo names

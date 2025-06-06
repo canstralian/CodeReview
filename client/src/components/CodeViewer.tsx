@@ -62,45 +62,58 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ file, issues = [], isLoading })
     // Safety check for file content
     if (!file || !file.content) return '';
 
-    const lines = file.content.split('\n');
-    let result = '';
+    const code = file.content;
+    const codeLines = code.split('\n');
 
-    lines.forEach((line, index) => {
-      const lineNumber = index + 1;
+      const createCodeElement = () => {
+        const container = document.createElement('div');
 
-      // Safely filter issues, ensuring we have a valid array
-      const issuesOnLine = Array.isArray(issues) 
-        ? issues.filter(i => i && i.lineNumber === lineNumber)
-        : [];
+        codeLines.forEach((line, index) => {
+          const lineNumber = index + 1;
+          const issuesOnLine = issues.filter(issue => issue.lineNumber === lineNumber);
 
-      // Add line number
-      result += `<span class="text-gray-500 select-none pr-4">${lineNumber.toString().padStart(3, ' ')}</span>`;
+          let lineClass = 'hover:bg-gray-50 dark:hover:bg-gray-800';
+          let issueClass = '';
 
-      // Add line with highlighting if there are issues
-      if (issuesOnLine.length > 0 && issuesOnLine[0] && issuesOnLine[0].issueType) {
-        const issueClass = getIssueHighlightClass(issuesOnLine[0].issueType);
-        // Safely escape line content to prevent XSS
-        const escapedLine = line
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
-        result += `<span class="${issueClass}">${escapedLine}</span>`;
-      } else {
-        // Safely escape line content to prevent XSS
-        const escapedLine = line
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
-        result += escapedLine;
-      }
+          if (issuesOnLine.length > 0) {
+            const highestSeverity = issuesOnLine.reduce((prev, current) => {
+              const severityOrder = { high: 3, medium: 2, low: 1 };
+              return severityOrder[current.severity] > severityOrder[prev.severity] ? current : prev;
+            });
 
-      // Add line break
-      if (index < lines.length - 1) {
-        result += '\n';
-      }
-    });
+            if (highestSeverity.severity === 'high') {
+              lineClass += ' bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500';
+              issueClass = 'text-red-600 dark:text-red-400';
+            } else if (highestSeverity.severity === 'medium') {
+              lineClass += ' bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500';
+              issueClass = 'text-yellow-600 dark:text-yellow-400';
+            } else {
+              lineClass += ' bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500';
+              issueClass = 'text-blue-600 dark:text-blue-400';
+            }
+          }
 
-    return result;
+          const lineDiv = document.createElement('div');
+          lineDiv.className = `${lineClass} flex`;
+
+          const lineNumberSpan = document.createElement('span');
+          lineNumberSpan.className = 'text-gray-500 select-none pr-4';
+          lineNumberSpan.textContent = lineNumber.toString().padStart(3, ' ');
+
+          const lineContentSpan = document.createElement('span');
+          lineContentSpan.className = issueClass;
+          lineContentSpan.textContent = line;
+
+          lineDiv.appendChild(lineNumberSpan);
+          lineDiv.appendChild(lineContentSpan);
+          container.appendChild(lineDiv);
+        });
+
+        return container.innerHTML;
+      };
+
+      const formattedCode = createCodeElement();
+    return formattedCode;
   };
 
   // Get highlighting class based on issue type
