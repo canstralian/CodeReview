@@ -160,17 +160,23 @@ function analyzeCodeSecurity(code: string, language: string): SecurityIssue[] {
 // -------------------------------------------------------------------------------------
 export { detectLanguage, analyzeCodeSecurity, getLineNumber };
 
+  // -----------------------------------------------------
+  // 3) SQL injection detection → critical severity
+  // -----------------------------------------------------
   if (code.includes('SELECT') && code.includes('FROM') && !code.includes('?') && (code.includes('${') || code.includes("' +") || code.includes("\" +"))) {
     securityIssues.push({
       type: 'security',
       severity: 'critical',
       line: getLineNumber(code, 'SELECT'),
       message: 'Potential SQL injection vulnerability detected',
-      suggestion: 'Use parameterized queries or prepared statements to prevent SQL injection attacks.'
+      suggestion: 'Use parameterized queries or prepared statements to prevent SQL injection attacks.',
+      language,
     });
   }
 
-  // Language-specific issues
+  // -----------------------------------------------------
+  // 4) Language-specific issues
+  // -----------------------------------------------------
   if (language === 'javascript' || language === 'typescript') {
     if (code.includes('document.write(') || code.includes('innerHTML') || code.includes('outerHTML')) {
       securityIssues.push({
@@ -178,7 +184,8 @@ export { detectLanguage, analyzeCodeSecurity, getLineNumber };
         severity: 'high',
         line: getLineNumber(code, 'innerHTML'),
         message: 'Potential Cross-Site Scripting (XSS) vulnerability',
-        suggestion: 'Use textContent instead of innerHTML, or sanitize user input before inserting into DOM.'
+        suggestion: 'Use textContent instead of innerHTML, or sanitize user input before inserting into DOM.',
+        language,
       });
     }
   } else if (language === 'python') {
@@ -188,11 +195,13 @@ export { detectLanguage, analyzeCodeSecurity, getLineNumber };
         severity: 'high',
         line: getLineNumber(code, 'pickle.loads('),
         message: 'Potentially unsafe deserialization or command execution',
-        suggestion: 'Use pickle.loads() with trusted data only. Use yaml.safe_load() instead of yaml.load(). Use subprocess.call() with care.'
+        suggestion: 'Use pickle.loads() with trusted data only. Use yaml.safe_load() instead of yaml.load(). Use subprocess.call() with care.',
+        language,
       });
     }
   }
 
+  // Finally, return whatever issues we found (could be an empty array).
   return securityIssues;
 }
 
@@ -308,23 +317,6 @@ function analyzePerformance(code: string, language: string): Array<any> {
   }
 
   return performanceIssues;
-}
-
-// Utility function to get line number of a pattern in code
-function getLineNumber(code: string, searchTerm: string): number {
-  if (!code || !searchTerm || !code.includes(searchTerm)) return 1;
-
-  try {
-    const lines = code.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i] && lines[i].includes(searchTerm)) {
-        return i + 1;
-      }
-    }
-  } catch (error) {
-    console.error('Error getting line number:', error);
-  }
-  return 1;
 }
 
 // Calculate security score based on issues
