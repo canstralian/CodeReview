@@ -19,11 +19,11 @@ const RepositoryView: React.FC<RepositoryViewProps> = ({ data }) => {
     files = [], 
     issues = [] 
   } = data || {};
-  
+
   const [selectedFile, setSelectedFile] = useState<RepositoryFile | null>(null);
   const [fileIssues, setFileIssues] = useState<CodeIssue[]>([]);
   const { toast } = useToast();
-  
+
   const fileContentMutation = useMutation({
     mutationFn: ({ repo, path }: { repo: string; path: string }) => 
       getFileWithIssues(repo, path),
@@ -50,7 +50,7 @@ const RepositoryView: React.FC<RepositoryViewProps> = ({ data }) => {
       });
       return;
     }
-    
+
     // Only fetch content for files, not directories
     if (file.type === "file") {
       fileContentMutation.mutate({ 
@@ -59,7 +59,7 @@ const RepositoryView: React.FC<RepositoryViewProps> = ({ data }) => {
       });
     }
   };
-  
+
   const handleFixIssue = (issue: CodeIssue) => {
     toast({
       title: "Fix Applied",
@@ -193,7 +193,7 @@ const RepositoryView: React.FC<RepositoryViewProps> = ({ data }) => {
                 issues={fileIssues} 
                 isLoading={fileContentMutation.isPending} 
               />
-              
+
               <IssuesList 
                 issues={fileIssues} 
                 onFixIssue={handleFixIssue} 

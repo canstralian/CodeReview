@@ -5,6 +5,9 @@ import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { insertRepositorySchema, insertCodeIssueSchema, insertRepositoryFileSchema } from "@shared/schema";
 import GitHubClient from "./services/githubClient";
+import { SecurityScanner } from "./services/securityScanner";
+import { AISuggestionsService } from "./services/aiSuggestions";
+import { QualityTrendsService } from "./services/qualityTrends";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { storage } from "./storage";
@@ -26,6 +29,9 @@ interface SecurityIssue {
 // GitHub client instance (unused in this snippet but assumed to be used elsewhere).
 // -------------------------------------------------------------------------------------
 const githubClient = new GitHubClient();
+const securityScanner = new SecurityScanner();
+const aiSuggestionsService = new AISuggestionsService();
+const qualityTrendsService = new QualityTrendsService();
 
 // -------------------------------------------------------------------------------------
 // Splits the code by newline and finds the first line index where `searchedSubstring`
@@ -894,6 +900,166 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error in repository endpoint:", error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // Comprehensive security scanning endpoint
+  app.post("/api/comprehensive-security-scan", async (req, res) => {
+    try {
+      const { repository, filePath, code } = req.body;
+
+      if (!repository || !filePath || !code) {
+        return res.status(400).json({ message: "Repository, filePath, and code are required" });
+      }
+
+      // Get repository data
+      const repositoryData = await storage.getRepositoryByFullName(repository);
+      if (!repositoryData) {
+        return res.status(404).json({ message: "Repository not found" });
+      }
+
+      // Perform comprehensive security scan
+      const scanResults = await securityScanner.performComprehensiveScan(
+        repositoryData.id, 
+        code, 
+        filePath
+      );
+
+      // Calculate overall risk score
+      const overallRiskScore = scanResults.reduce((total, result) => total + result.riskScore, 0) / scanResults.length;
+      
+      return res.json({
+        repository,
+        filePath,
+        scanResults,
+        overallRiskScore: Math.round(overallRiskScore),
+        scanTimestamp: new Date().toISOString(),
+        recommendations: [
+          "Prioritize fixing critical and high-severity vulnerabilities",
+          "Implement security scanning in your CI/CD pipeline",
+          "Consider using security linting tools",
+          "Regular dependency updates and security audits"
+        ]
+      });
+    } catch (error) {
+      console.error("Error in comprehensive security scan:", error);
+      return res.status(500).json({ message: "Server error during security scan" });
+    }
+  });
+
+  // Quality trends endpoint
+  app.get("/api/quality-trends/:repository", async (req, res) => {
+    try {
+      const { repository } = req.params;
+      const { days = "30" } = req.query;
+
+      const repositoryData = await storage.getRepositoryByFullName(repository);
+      if (!repositoryData) {
+        return res.status(404).json({ message: "Repository not found" });
+      }
+
+      const trendData = await qualityTrendsService.getTrendData(
+        repositoryData.id, 
+        parseInt(days as string)
+      );
+
+      const qualityMetrics = await qualityTrendsService.getQualityMetrics(repositoryData.id);
+      const qualityReport = await qualityTrendsService.generateQualityReport(repositoryData.id);
+
+      return res.json({
+        repository,
+        timeframe: `${days} days`,
+        trends: trendData,
+        metrics: qualityMetrics,
+        report: qualityReport
+      });
+    } catch (error) {
+      console.error("Error fetching quality trends:", error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // AI suggestions endpoint
+  app.post("/api/ai-suggestions", async (req, res) => {
+    try {
+      const { repository, filePath, code, language, issues } = req.body;
+
+      if (!repository || !filePath || !code) {
+        return res.status(400).json({ message: "Repository, filePath, and code are required" });
+      }
+
+      const repositoryData = await storage.getRepositoryByFullName(repository);
+      if (!repositoryData) {
+        return res.status(404).json({ message: "Repository not found" });
+      }
+
+      const context = {
+        code,
+        filePath,
+        language: language || 'javascript',
+        issues: issues || []
+      };
+
+      const suggestions = await aiSuggestionsService.generateSuggestions(
+        repositoryData.id,
+        context
+      );
+
+      return res.json({
+        repository,
+        filePath,
+        suggestions,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error generating AI suggestions:", error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // Apply AI suggestion endpoint
+  app.post("/api/ai-suggestions/:id/apply", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const suggestionId = parseInt(id);
+
+      if (isNaN(suggestionId)) {
+        return res.status(400).json({ message: "Invalid suggestion ID" });
+      }
+
+      const success = await aiSuggestionsService.applySuggestion(suggestionId);
+      
+      if (success) {
+        return res.json({ message: "Suggestion applied successfully" });
+      } else {
+        return res.status(500).json({ message: "Failed to apply suggestion" });
+      }
+    } catch (error) {
+      console.error("Error applying suggestion:", error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // Reject AI suggestion endpoint
+  app.post("/api/ai-suggestions/:id/reject", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const suggestionId = parseInt(id);
+
+      if (isNaN(suggestionId)) {
+        return res.status(400).json({ message: "Invalid suggestion ID" });
+      }
+
+      const success = await aiSuggestionsService.rejectSuggestion(suggestionId);
+      
+      if (success) {
+        return res.json({ message: "Suggestion rejected successfully" });
+      } else {
+        return res.status(500).json({ message: "Failed to reject suggestion" });
+      }
+    } catch (error) {
+      console.error("Error rejecting suggestion:", error);
       return res.status(500).json({ message: "Server error" });
     }
   });

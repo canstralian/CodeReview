@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp, foreignKey, varchar, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, timestamp, foreignKey, varchar, index, real, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -107,6 +107,50 @@ export const insertCodeIssueSchema = createInsertSchema(codeIssues).omit({
 
 export type InsertCodeIssue = z.infer<typeof insertCodeIssueSchema>;
 export type CodeIssue = typeof codeIssues.$inferSelect;
+
+export const qualityTrends = pgTable("quality_trends", {
+  id: serial("id").primaryKey(),
+  repositoryId: integer("repository_id").references(() => repositories.id),
+  scanDate: timestamp("scan_date").defaultNow(),
+  totalIssues: integer("total_issues").notNull().default(0),
+  criticalIssues: integer("critical_issues").notNull().default(0),
+  highIssues: integer("high_issues").notNull().default(0),
+  mediumIssues: integer("medium_issues").notNull().default(0),
+  lowIssues: integer("low_issues").notNull().default(0),
+  securityScore: integer("security_score").notNull().default(100),
+  qualityScore: integer("quality_score").notNull().default(100),
+  performanceScore: integer("performance_score").notNull().default(100),
+  overallScore: integer("overall_score").notNull().default(100),
+  technicalDebt: real("technical_debt").notNull().default(0),
+  codeComplexity: real("code_complexity").notNull().default(0),
+  testCoverage: real("test_coverage").notNull().default(0),
+});
+
+export const securityScans = pgTable("security_scans", {
+  id: serial("id").primaryKey(),
+  repositoryId: integer("repository_id").references(() => repositories.id),
+  scanType: text("scan_type").notNull(), // 'dependency', 'secret', 'sast', 'dast'
+  scanDate: timestamp("scan_date").defaultNow(),
+  vulnerabilities: jsonb("vulnerabilities"),
+  riskScore: integer("risk_score").notNull().default(0),
+  status: text("status").notNull().default('completed'), // 'pending', 'running', 'completed', 'failed'
+  findings: jsonb("findings"),
+});
+
+export const aiSuggestions = pgTable("ai_suggestions", {
+  id: serial("id").primaryKey(),
+  issueId: integer("issue_id").references(() => codeIssues.id),
+  repositoryId: integer("repository_id").references(() => repositories.id),
+  filePath: text("file_path").notNull(),
+  suggestion: text("suggestion").notNull(),
+  confidence: real("confidence").notNull().default(0),
+  suggestedFix: text("suggested_fix"),
+  reasoning: text("reasoning"),
+  category: text("category").notNull(), // 'refactor', 'security', 'performance', 'bug-fix'
+  status: text("status").notNull().default('pending'), // 'pending', 'applied', 'rejected'
+  createdAt: timestamp("created_at").defaultNow(),
+  appliedAt: timestamp("applied_at"),
+});
 
 // Repository file schema
 export const repositoryFiles = pgTable("repository_files", {
