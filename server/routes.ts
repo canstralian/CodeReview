@@ -1121,7 +1121,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Additional validation for owner and repo names
-      const [owner, repo] = repoParts;
       if (owner.length > 100 || repo.length > 100) {
         return res.status(400).json({ message: "Owner or repository name is too long" });
       }
