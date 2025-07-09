@@ -76,7 +76,7 @@ function detectLanguage(code: string): string {
 // analyzeCodeSecurity
 //   - code: full source code as a string (with newlines, etc.)
 //   - language: the detected or declared language (e.g. 'javascript', 'python')
-// 
+//
 // Returns an array of SecurityIssue objects for each finding.
 // -------------------------------------------------------------------------------------
 function analyzeCodeSecurity(code: string, language: string): SecurityIssue[] {
@@ -108,7 +108,7 @@ function analyzeCodeSecurity(code: string, language: string): SecurityIssue[] {
                   code.match(/api[_-]?key\s*=\s*['"][^'"]+['"]/) ||
                   code.match(/secret\s*=\s*['"][^'"]+['"]/) ||
                   code.match(/token\s*=\s*['"][^'"]+['"]/);
-    
+
     // If we matched something, figure out which substring to search for line number.
     let searchKey = "";
     if (match) {
@@ -134,31 +134,6 @@ function analyzeCodeSecurity(code: string, language: string): SecurityIssue[] {
       language,
     });
   }
-
-  // -----------------------------------------------------
-  // 3) (Optional) Future: add other checks per language
-  //    e.g. SQL injection patterns in JS, XSS checks, etc.
-  // -----------------------------------------------------
-  // if (language === 'javascript') { ... }
-  // else if (language === 'python') { ... }
-
-  // Finally, return whatever issues we found (could be an empty array).
-  return securityIssues;
-}
-
-// -------------------------------------------------------------------------------------
-// Example usage (for manual testing):
-// -------------------------------------------------------------------------------------
-// const sampleJs = `
-//   const password = "hunter2";
-//   eval("console.log('insecure')");
-// `;
-// console.log(analyzeCodeSecurity(sampleJs, detectLanguage(sampleJs)));
-
-// -------------------------------------------------------------------------------------
-// Export anything else you need in this module
-// -------------------------------------------------------------------------------------
-export { detectLanguage, analyzeCodeSecurity, getLineNumber };
 
   // -----------------------------------------------------
   // 3) SQL injection detection → critical severity
@@ -838,19 +813,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!url) {
         return res.status(400).json({ message: "Repository URL is required" });
       }
-      
+
       // Extract owner/repo from GitHub URL
       const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
       if (!match) {
         return res.status(400).json({ message: "Invalid GitHub URL format. Use: https://github.com/owner/repo" });
       }
-      
+
       const [, owner, repo] = match;
       const repository = `${owner}/${repo}`;
-      
+
       // Get or create repository data
       let repositoryData = await storage.getRepositoryByFullName(repository);
-      
+
       if (!repositoryData) {
         // Create a new repository entry with simulated data
         const [owner, repo] = repository.split('/');
@@ -872,19 +847,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           testCoverage: Math.floor(Math.random() * 40) + 60,
           issuesCount: Math.floor(Math.random() * 20) + 5,
           metaData: {},
-          fileStructure: {}
-        };
-        
+          fileStructure: {}};
+
         repositoryData = await storage.createRepository(newRepo);
-        
+
         // Generate files and issues
         await generateFiles(repositoryData.id, "app");
         await generateIssues(repositoryData.id);
       }
-      
+
       const files = await storage.getFilesByRepositoryId(repositoryData.id);
       const issues = await storage.getIssuesByRepositoryId(repositoryData.id);
-      
+
       return res.json({
         repository: repositoryData,
         files,
@@ -913,14 +887,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Perform comprehensive security scan
       const scanResults = await securityScanner.performComprehensiveScan(
-        repositoryData.id, 
-        code, 
+        repositoryData.id,
+        code,
         filePath
       );
 
       // Calculate overall risk score
       const overallRiskScore = scanResults.reduce((total, result) => total + result.riskScore, 0) / scanResults.length;
-      
+
       return res.json({
         repository,
         filePath,
@@ -952,7 +926,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const trendData = await qualityTrendsService.getTrendData(
-        repositoryData.id, 
+        repositoryData.id,
         parseInt(days as string)
       );
 
@@ -1021,7 +995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const success = await aiSuggestionsService.applySuggestion(suggestionId);
-      
+
       if (success) {
         return res.json({ message: "Suggestion applied successfully" });
       } else {
@@ -1044,7 +1018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const success = await aiSuggestionsService.rejectSuggestion(suggestionId);
-      
+
       if (success) {
         return res.json({ message: "Suggestion rejected successfully" });
       } else {
@@ -1087,10 +1061,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       // Generate overall security score
-      const securityScore = Math.max(0, 100 - 
-        (vulnerabilityCounts.critical * 25) - 
-        (vulnerabilityCounts.high * 10) - 
-        (vulnerabilityCounts.medium * 5) - 
+      const securityScore = Math.max(0, 100 -
+        (vulnerabilityCounts.critical * 25) -
+        (vulnerabilityCounts.high * 10) -
+        (vulnerabilityCounts.medium * 5) -
         (vulnerabilityCounts.low * 2)
       );
 
@@ -1340,7 +1314,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Generate simulated repositories for the user
       const repoTypes = [
-        "website", "app", "api", "ui-components", 
+        "website", "app", "api", "ui-components",
         "docs", "utils", "mobile", "server"
       ];
 
@@ -1417,59 +1391,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function generateFiles(repositoryId: number, repoType: string) {
     const fileStructures: Record<string, string[]> = {
       "website": [
-        "index.html", 
-        "styles.css", 
-        "script.js", 
-        "images/logo.png", 
+        "index.html",
+        "styles.css",
+        "script.js",
+        "images/logo.png",
         "pages/about.html"
       ],
       "app": [
-        "src/index.js", 
-        "src/App.js", 
-        "src/components/Header.js", 
-        "public/index.html", 
+        "src/index.js",
+        "src/App.js",
+        "src/components/Header.js",
+        "public/index.html",
         "package.json"
       ],
       "api": [
-        "server.js", 
-        "routes/index.js", 
-        "models/User.js", 
-        "controllers/auth.js", 
+        "server.js",
+        "routes/index.js",
+        "models/User.js",
+        "controllers/auth.js",
         "middleware/auth.js"
       ],
       "ui-components": [
-        "src/Button.js", 
-        "src/Card.js", 
-        "src/Input.js", 
-        "src/theme.js", 
+        "src/Button.js",
+        "src/Card.js",
+        "src/Input.js",
+        "src/theme.js",
         "package.json"
       ],
       "docs": [
-        "README.md", 
-        "getting-started.md", 
-        "api-reference.md", 
-        "tutorials/basic.md", 
+        "README.md",
+        "getting-started.md",
+        "api-reference.md",
+        "tutorials/basic.md",
         "examples/simple.md"
       ],
       "utils": [
-        "src/string.js", 
-        "src/array.js", 
-        "src/date.js", 
-        "src/validation.js", 
+        "src/string.js",
+        "src/array.js",
+        "src/date.js",
+        "src/validation.js",
         "index.js"
       ],
       "mobile": [
-        "App.js", 
-        "screens/Home.js", 
-        "components/Button.js", 
-        "styles/theme.js", 
+        "App.js",
+        "screens/Home.js",
+        "components/Button.js",
+        "styles/theme.js",
         "package.json"
       ],
       "server": [
-        "index.js", 
-        "config/db.js", 
-        "routes/api.js", 
-        "models/User.js", 
+        "index.js",
+        "config/db.js",
+        "routes/api.js",
+        "models/User.js",
         "middleware/auth.js"
       ]
     };
@@ -1682,3 +1656,5 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   return httpServer;
 }
+
+export { detectLanguage, analyzeCodeSecurity, getLineNumber };
