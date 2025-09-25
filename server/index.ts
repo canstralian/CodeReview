@@ -1,8 +1,34 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import helmet from "helmet";
+import cors from "cors";
+import { setupAuth } from "./replitAuth";
 
 const app = express();
+
+// Security middleware - helmet for secure headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+}));
+
+// CORS middleware with environment-based allowed origins
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : ['http://localhost:5173', 'http://localhost:5000'];
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true, // Allow cookies for authentication
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -37,6 +63,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Setup authentication before registering other routes
+  await setupAuth(app);
+  
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
