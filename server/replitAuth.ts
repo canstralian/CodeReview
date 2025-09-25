@@ -1,12 +1,18 @@
 import * as client from "openid-client";
 import { Strategy, type VerifyFunction } from "openid-client/passport";
-
 import passport from "passport";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
+import { z } from "zod";
+
+// Zod validation schema for login parameters
+const loginQuerySchema = z.object({
+  redirect_uri: z.string().url().optional(),
+  state: z.string().max(255).optional(),
+}).strict();
 
 if (!process.env.REPLIT_DOMAINS) {
   throw new Error("Environment variable REPLIT_DOMAINS not provided");
@@ -31,14 +37,19 @@ export function getSession() {
     ttl: sessionTtl,
     tableName: "sessions",
   });
+  
+  // Production-aware session configuration
+  const isProduction = process.env.NODE_ENV === 'production';
+  
   return session({
     secret: process.env.SESSION_SECRET!,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
-      httpOnly: true,
-      secure: true,
+      httpOnly: true, // Prevent XSS attacks
+      secure: isProduction, // HTTPS only in production
+      sameSite: 'strict', // CSRF protection
       maxAge: sessionTtl,
     },
   });
@@ -102,10 +113,23 @@ export async function setupAuth(app: Express) {
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", (req, res, next) => {
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      prompt: "login consent",
-      scope: ["openid", "email", "profile", "offline_access"],
-    })(req, res, next);
+    try {
+      // Validate query parameters with Zod
+      const validatedQuery = loginQuerySchema.parse(req.query);
+      
+      passport.authenticate(`replitauth:${req.hostname}`, {
+        prompt: "login consent",
+        scope: ["openid", "email", "profile", "offline_access"],
+      })(req, res, next);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Invalid login parameters",
+          errors: error.errors,
+        });
+      }
+      next(error);
+    }
   });
 
   app.get("/api/callback", (req, res, next) => {
