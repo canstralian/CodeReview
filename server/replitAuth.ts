@@ -115,7 +115,7 @@ export async function setupAuth(app: Express) {
   app.get("/api/login", (req, res, next) => {
     try {
       // Validate query parameters with Zod
-      const validatedQuery = loginQuerySchema.parse(req.query);
+      loginQuerySchema.parse(req.query);
       
       passport.authenticate(`replitauth:${req.hostname}`, {
         prompt: "login consent",
