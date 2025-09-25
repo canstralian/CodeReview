@@ -20,8 +20,19 @@ app.use(helmet({
 }));
 
 // CORS middleware with environment-based allowed origins
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+      .map(origin => origin.trim())
+      .filter(origin => {
+        try {
+          // Only allow valid http(s) origins
+          const url = new URL(origin);
+          return url.protocol === 'http:' || url.protocol === 'https:';
+        } catch (e) {
+          console.warn(`[CORS] Ignoring invalid origin in ALLOWED_ORIGINS: "${origin}"`);
+          return false;
+        }
+      })
   : ['http://localhost:5173', 'http://localhost:5000'];
 
 app.use(cors({
