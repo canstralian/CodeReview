@@ -790,8 +790,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const detectedLanguage = language || detectLanguage(code);
 
       // Check if Claude API is available
-      if (!process.env.ANTHROPIC_API_KEY) {
-        console.warn("ANTHROPIC_API_KEY not found, falling back to basic analysis");
+      const hasValidApiKey = process.env.ANTHROPIC_API_KEY && 
+                            process.env.ANTHROPIC_API_KEY !== 'test_key_not_set' &&
+                            process.env.ANTHROPIC_API_KEY.startsWith('sk-');
+                            
+      if (!hasValidApiKey) {
+        console.warn("Valid ANTHROPIC_API_KEY not found, falling back to basic analysis");
         
         // Fallback to basic analysis
         const securityIssues = analyzeCodeSecurity(code, detectedLanguage);
