@@ -3,7 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import helmet from "helmet";
 import cors from "cors";
-import { setupAuth } from "./replitAuth";
+// import { setupAuth } from "./replitAuth"; // Temporarily disabled for testing
 
 const app = express();
 
@@ -75,7 +75,7 @@ app.use((req, res, next) => {
 
 (async () => {
   // Setup authentication before registering other routes
-  await setupAuth(app);
+  // await setupAuth(app); // Temporarily disabled for testing
   
   const server = await registerRoutes(app);
 
