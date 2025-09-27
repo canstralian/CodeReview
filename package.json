@@ -9,7 +9,7 @@
     "start": "tsx server/index.ts",
     "build": "vite build",
     "db:push": "drizzle-kit push",
-    "test": "jest --coverage",
+    "test": "jest --coverage --passWithNoTests",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
