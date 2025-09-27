@@ -36,7 +36,7 @@ export default function AISuggestions({ repository, filePath, code, language, is
   const generateSuggestions = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/ai-suggestions', {
+      const response = await fetch('/api/analyze-code', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -51,6 +51,11 @@ export default function AISuggestions({ repository, filePath, code, language, is
       });
 
       const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP ${response.status}`);
+      }
+      
       setSuggestions(data.suggestions || []);
     } catch (error) {
       console.error('Error generating AI suggestions:', error);

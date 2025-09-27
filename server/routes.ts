@@ -12,6 +12,24 @@ import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { storage } from "./storage";
 import type { Express } from "express";
+import Anthropic from "@anthropic-ai/sdk";
+import { graphql } from "@octokit/graphql";
+import dotenv from "dotenv";
+
+// Load environment variables
+dotenv.config();
+
+// Initialize Anthropic client
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+// Initialize GitHub GraphQL client
+const graphqlWithAuth = graphql.defaults({
+  headers: {
+    authorization: `token ${process.env.GITHUB_TOKEN}`,
+  },
+});
 
 // -------------------------------------------------------------------------------------
 // Interface to represent a single security issue found in code
@@ -738,53 +756,392 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Code analysis endpoint
-  app.post("/api/analyze-code", (req, res) => {
+  /**
+   * AI-Powered Code Analysis Endpoint
+   * Analyzes code using Claude AI and provides detailed suggestions
+   */
+  app.post("/api/analyze-code", async (req, res) => {
     try {
-      const { code, language } = req.body;
+      const { code, language, repository, filePath } = req.body;
 
+      // Input validation
       if (!code || typeof code !== 'string') {
-        return res.status(400).json({ message: "Code is required and must be a string" });
+        return res.status(400).json({ 
+          message: "Code is required and must be a string",
+          error: "INVALID_INPUT"
+        });
       }
 
-      if (code.length > 50000) {
-        return res.status(400).json({ message: "Code is too large. Maximum size is 50KB" });
+      if (code.length > 100000) {
+        return res.status(400).json({ 
+          message: "Code is too large. Maximum size is 100KB",
+          error: "CODE_TOO_LARGE" 
+        });
       }
 
+      if (code.trim().length === 0) {
+        return res.status(400).json({ 
+          message: "Code cannot be empty",
+          error: "EMPTY_CODE"
+        });
+      }
+
+      // Detect language if not provided
       const detectedLanguage = language || detectLanguage(code);
 
-      // Analyze code for security, quality, and performance issues
-      const securityIssues = analyzeCodeSecurity(code, detectedLanguage);
-      const qualityIssues = analyzeCodeQuality(code, detectedLanguage);
-      const performanceIssues = analyzePerformance(code, detectedLanguage);
+      // Check if Claude API is available
+      if (!process.env.ANTHROPIC_API_KEY) {
+        console.warn("ANTHROPIC_API_KEY not found, falling back to basic analysis");
+        
+        // Fallback to basic analysis
+        const securityIssues = analyzeCodeSecurity(code, detectedLanguage);
+        const qualityIssues = analyzeCodeQuality(code, detectedLanguage);
+        const performanceIssues = analyzePerformance(code, detectedLanguage);
 
-      // Calculate scores
-      const securityScore = calculateSecurityScore(securityIssues);
-      const qualityScore = calculateQualityScore(qualityIssues);
-      const performanceScore = calculatePerformanceScore(performanceIssues);
+        return res.json({
+          language: detectedLanguage,
+          suggestions: [],
+          fallbackAnalysis: {
+            security: securityIssues,
+            quality: qualityIssues,
+            performance: performanceIssues
+          },
+          generatedAt: new Date().toISOString(),
+          source: "fallback"
+        });
+      }
 
-      // Generate recommendations
-      const recommendations = generateRecommendations(securityIssues, qualityIssues, performanceIssues);
+      // Create prompt for Claude
+      const prompt = `Analyze the following ${detectedLanguage} code and provide detailed suggestions for improvement. Focus on:
+
+1. Security vulnerabilities and fixes
+2. Performance optimizations
+3. Code quality improvements
+4. Bug detection and fixes
+5. Best practices and refactoring opportunities
+
+Code:
+\`\`\`${detectedLanguage}
+${code}
+\`\`\`
+
+Respond with a JSON object containing an array of suggestions. Each suggestion should have:
+- suggestion: A clear, actionable improvement suggestion
+- confidence: A number between 0 and 1 indicating how confident you are
+- suggestedFix: The actual code fix or improvement
+- reasoning: Detailed explanation of why this improvement is needed
+- category: One of 'security', 'performance', 'refactor', 'bug-fix'
+
+Example format:
+{
+  "suggestions": [
+    {
+      "suggestion": "Use parameterized queries to prevent SQL injection",
+      "confidence": 0.95,
+      "suggestedFix": "const query = 'SELECT * FROM users WHERE id = ?'; db.query(query, [userId]);",
+      "reasoning": "Direct string concatenation in SQL queries allows injection attacks",
+      "category": "security"
+    }
+  ]
+}`;
+
+      // Call Claude API
+      const response = await anthropic.messages.create({
+        model: "claude-3-sonnet-20240229",
+        max_tokens: 4000,
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ]
+      });
+
+      // Parse Claude's response
+      let suggestions = [];
+      try {
+        const content = response.content[0];
+        if (content.type === 'text') {
+          // Extract JSON from Claude's response
+          const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            suggestions = parsed.suggestions || [];
+          }
+        }
+      } catch (parseError) {
+        console.error("Failed to parse Claude response:", parseError);
+        // If parsing fails, create a basic suggestion from the raw response
+        suggestions = [{
+          suggestion: "AI analysis completed but response parsing failed",
+          confidence: 0.5,
+          suggestedFix: "Please review the code manually",
+          reasoning: "The AI provided feedback but it couldn't be properly parsed",
+          category: "refactor"
+        }];
+      }
+
+      // Add metadata to suggestions
+      const enhancedSuggestions = suggestions.map((suggestion, index) => ({
+        id: index + 1,
+        ...suggestion,
+        filePath: filePath || 'unknown',
+        language: detectedLanguage,
+        timestamp: new Date().toISOString()
+      }));
 
       return res.json({
+        repository: repository || 'unknown',
+        filePath: filePath || 'unknown',
         language: detectedLanguage,
-        scores: {
-          security: securityScore,
-          quality: qualityScore,
-          performance: performanceScore,
-          overall: Math.round((securityScore + qualityScore + performanceScore) / 3)
-        },
-        issues: {
-          security: securityIssues,
-          quality: qualityIssues,
-          performance: performanceIssues,
-          total: securityIssues.length + qualityIssues.length + performanceIssues.length
-        },
-        recommendations
+        suggestions: enhancedSuggestions,
+        totalSuggestions: enhancedSuggestions.length,
+        generatedAt: new Date().toISOString(),
+        source: "claude-ai"
       });
+
     } catch (error) {
-      console.error("Error analyzing code:", error);
-      return res.status(500).json({ message: "Server error" });
+      console.error("Error in AI code analysis:", error);
+      
+      // Provide helpful error messages based on error type
+      if (error.message?.includes('API key')) {
+        return res.status(401).json({ 
+          message: "AI service authentication failed",
+          error: "API_AUTH_FAILED"
+        });
+      }
+      
+      if (error.message?.includes('rate limit')) {
+        return res.status(429).json({ 
+          message: "AI service rate limit exceeded. Please try again later.",
+          error: "RATE_LIMIT_EXCEEDED"
+        });
+      }
+
+      return res.status(500).json({ 
+        message: "Internal server error during code analysis",
+        error: "INTERNAL_ERROR"
+      });
+    }
+  });
+
+  /**
+   * Team Dashboard Endpoint
+   * Fetches repository metrics using GitHub GraphQL API
+   */
+  app.post("/api/team-dashboard", async (req, res) => {
+    try {
+      const { repositories } = req.body;
+
+      // Input validation
+      if (!repositories || !Array.isArray(repositories)) {
+        return res.status(400).json({
+          message: "Repositories array is required",
+          error: "INVALID_INPUT"
+        });
+      }
+
+      if (repositories.length === 0) {
+        return res.status(400).json({
+          message: "At least one repository is required",
+          error: "EMPTY_REPOSITORIES"
+        });
+      }
+
+      if (repositories.length > 10) {
+        return res.status(400).json({
+          message: "Maximum 10 repositories allowed per request",
+          error: "TOO_MANY_REPOSITORIES"
+        });
+      }
+
+      // Validate repository format
+      for (const repo of repositories) {
+        if (!repo || typeof repo !== 'string' || !repo.includes('/')) {
+          return res.status(400).json({
+            message: "Repository format should be 'owner/name'",
+            error: "INVALID_REPOSITORY_FORMAT"
+          });
+        }
+      }
+
+      // Check if GitHub token is available
+      if (!process.env.GITHUB_TOKEN) {
+        return res.status(503).json({
+          message: "GitHub integration is not configured",
+          error: "GITHUB_TOKEN_MISSING"
+        });
+      }
+
+      const dashboardData = [];
+
+      for (const repoFullName of repositories) {
+        try {
+          const [owner, name] = repoFullName.split('/');
+          
+          // GraphQL query to fetch repository metrics
+          const query = `
+            query($owner: String!, $name: String!) {
+              repository(owner: $owner, name: $name) {
+                name
+                owner {
+                  login
+                }
+                description
+                stargazerCount
+                forkCount
+                watchers {
+                  totalCount
+                }
+                issues(states: OPEN) {
+                  totalCount
+                }
+                pullRequests(states: OPEN) {
+                  totalCount
+                }
+                releases(first: 1, orderBy: {field: CREATED_AT, direction: DESC}) {
+                  nodes {
+                    tagName
+                    createdAt
+                  }
+                }
+                defaultBranchRef {
+                  target {
+                    ... on Commit {
+                      history(first: 1) {
+                        nodes {
+                          committedDate
+                        }
+                      }
+                    }
+                  }
+                }
+                languages(first: 5, orderBy: {field: SIZE, direction: DESC}) {
+                  edges {
+                    size
+                    node {
+                      name
+                      color
+                    }
+                  }
+                }
+                vulnerabilityAlerts(first: 10, states: OPEN) {
+                  totalCount
+                }
+              }
+            }
+          `;
+
+          const response = await graphqlWithAuth(query, {
+            owner,
+            name
+          });
+
+          const repo = response.repository;
+          
+          if (!repo) {
+            dashboardData.push({
+              repository: repoFullName,
+              error: "Repository not found or access denied",
+              status: "error"
+            });
+            continue;
+          }
+
+          // Calculate language distribution
+          const totalSize = repo.languages.edges.reduce((sum, edge) => sum + edge.size, 0);
+          const languageDistribution = repo.languages.edges.map(edge => ({
+            name: edge.node.name,
+            color: edge.node.color,
+            percentage: totalSize > 0 ? Math.round((edge.size / totalSize) * 100) : 0
+          }));
+
+          // Get last commit date
+          const lastCommitDate = repo.defaultBranchRef?.target?.history?.nodes?.[0]?.committedDate;
+          
+          // Get latest release
+          const latestRelease = repo.releases.nodes.length > 0 ? repo.releases.nodes[0] : null;
+
+          dashboardData.push({
+            repository: repoFullName,
+            name: repo.name,
+            owner: repo.owner.login,
+            description: repo.description,
+            metrics: {
+              stars: repo.stargazerCount,
+              forks: repo.forkCount,
+              watchers: repo.watchers.totalCount,
+              openIssues: repo.issues.totalCount,
+              openPRs: repo.pullRequests.totalCount,
+              vulnerabilityAlerts: repo.vulnerabilityAlerts.totalCount
+            },
+            activity: {
+              lastCommit: lastCommitDate,
+              latestRelease: latestRelease ? {
+                tagName: latestRelease.tagName,
+                createdAt: latestRelease.createdAt
+              } : null
+            },
+            languages: languageDistribution,
+            status: "success"
+          });
+
+        } catch (repoError) {
+          console.error(`Error fetching data for ${repoFullName}:`, repoError);
+          dashboardData.push({
+            repository: repoFullName,
+            error: repoError.message || "Failed to fetch repository data",
+            status: "error"
+          });
+        }
+      }
+
+      // Calculate summary statistics
+      const successfulRepos = dashboardData.filter(repo => repo.status === "success");
+      const totalStars = successfulRepos.reduce((sum, repo) => sum + (repo.metrics?.stars || 0), 0);
+      const totalForks = successfulRepos.reduce((sum, repo) => sum + (repo.metrics?.forks || 0), 0);
+      const totalOpenIssues = successfulRepos.reduce((sum, repo) => sum + (repo.metrics?.openIssues || 0), 0);
+      const totalOpenPRs = successfulRepos.reduce((sum, repo) => sum + (repo.metrics?.openPRs || 0), 0);
+      const totalVulnerabilities = successfulRepos.reduce((sum, repo) => sum + (repo.metrics?.vulnerabilityAlerts || 0), 0);
+
+      return res.json({
+        summary: {
+          totalRepositories: repositories.length,
+          successfulFetches: successfulRepos.length,
+          totalStars,
+          totalForks,
+          totalOpenIssues,
+          totalOpenPRs,
+          totalVulnerabilities,
+          avgStarsPerRepo: successfulRepos.length > 0 ? Math.round(totalStars / successfulRepos.length) : 0
+        },
+        repositories: dashboardData,
+        generatedAt: new Date().toISOString(),
+        source: "github-graphql"
+      });
+
+    } catch (error) {
+      console.error("Error in team dashboard:", error);
+      
+      // Provide helpful error messages
+      if (error.message?.includes('rate limit')) {
+        return res.status(429).json({
+          message: "GitHub API rate limit exceeded. Please try again later.",
+          error: "RATE_LIMIT_EXCEEDED"
+        });
+      }
+
+      if (error.message?.includes('Bad credentials')) {
+        return res.status(401).json({
+          message: "GitHub authentication failed. Please check your token.",
+          error: "GITHUB_AUTH_FAILED"
+        });
+      }
+
+      return res.status(500).json({
+        message: "Internal server error while fetching dashboard data",
+        error: "INTERNAL_ERROR"
+      });
     }
   });
 
