@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered Code Analysis & Team Dashboard Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        h1, h2 {
+            color: #333;
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 10px;
+        }
+        
+        .demo-section {
+            margin-bottom: 40px;
+        }
+        
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background: #005a9e;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .results {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        
+        .success {
+            color: #155724;
+            background: #d4edda;
+            border-color: #c3e6cb;
+        }
+        
+        .loading {
+            color: #856404;
+            background: #fff3cd;
+            border-color: #ffeaa7;
+        }
+        
+        .example-buttons {
+            margin: 10px 0;
+        }
+        
+        .example-button {
+            background: #6c757d;
+            font-size: 12px;
+            padding: 6px 12px;
+        }
+        
+        .example-button:hover {
+            background: #545b62;
+        }
+        
+        .api-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-online {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-offline {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .feature-badge {
+            display: inline-block;
+            background: #007acc;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="apiStatus" class="api-status status-offline">API: Checking...</div>
+
+    <div class="container">
+        <h1>🤖 AI-Powered Code Analysis & Team Dashboard Demo</h1>
+        <p>This demo showcases the new AI-powered code analysis and GitHub team dashboard features.</p>
+        
+        <div class="demo-section">
+            <h2>🔍 AI Code Analysis <span class="feature-badge">Claude AI Integration</span></h2>
+            <p>Analyzes code for security vulnerabilities, performance issues, and quality improvements using Anthropic's Claude AI (with intelligent fallback).</p>
+            
+            <div style="margin-bottom: 15px;">
+                <label><strong>Programming Language:</strong></label>
+                <select id="languageSelect" style="padding: 8px; margin-left: 10px;">
+                    <option value="javascript">JavaScript</option>
+                    <option value="python">Python</option>
+                    <option value="java">Java</option>
+                    <option value="cpp">C++</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label><strong>Repository & File Path (optional):</strong></label>
+                <input type="text" id="repoInput" placeholder="owner/repository" value="test/demo-repo">
+                <input type="text" id="filePathInput" placeholder="src/example.js" value="src/demo.js">
+            </div>
+            
+            <label><strong>Code to Analyze:</strong></label>
+            <div class="example-buttons">
+                <button class="example-button" onclick="loadSecureExample()">Load Secure Example</button>
+                <button class="example-button" onclick="loadInsecureExample()">Load Insecure Example</button>
+                <button class="example-button" onclick="loadPerformanceExample()">Load Performance Example</button>
+            </div>
+            <textarea id="codeInput" placeholder="Enter your code here...">function calculateSum(a, b) {
+    return a + b;
+}</textarea>
+            
+            <button onclick="analyzeCode()" id="analyzeBtn">🔍 Analyze Code</button>
+            <div id="analysisResults" class="results" style="display: none;"></div>
+        </div>
+
+        <div class="demo-section">
+            <h2>📊 GitHub Team Dashboard <span class="feature-badge">GitHub GraphQL API</span></h2>
+            <p>Monitor repository metrics including stars, forks, issues, PRs, and security alerts using GitHub's GraphQL API.</p>
+            
+            <label><strong>GitHub Repositories (one per line):</strong></label>
+            <textarea id="repoList" placeholder="Enter repository names in format: owner/repo">facebook/react
+microsoft/vscode
+torvalds/linux</textarea>
+            
+            <button onclick="fetchDashboard()" id="dashboardBtn">📊 Fetch Dashboard Data</button>
+            <div id="dashboardResults" class="results" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Check API status on load
+        checkApiStatus();
+        
+        async function checkApiStatus() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    document.getElementById('apiStatus').textContent = 'API: Online ✓';
+                    document.getElementById('apiStatus').className = 'api-status status-online';
+                } else {
+                    throw new Error('API not ready');
+                }
+            } catch (error) {
+                document.getElementById('apiStatus').textContent = 'API: Offline ✗';
+                document.getElementById('apiStatus').className = 'api-status status-offline';
+            }
+        }
+        
+        function loadSecureExample() {
+            document.getElementById('codeInput').value = `function authenticateUser(username, password) {
+    // Secure password hashing
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    
+    // Parameterized query to prevent SQL injection
+    const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
+    return database.query(query, [username, hashedPassword]);
+}
+
+function sanitizeInput(userInput) {
+    // Proper input sanitization
+    return DOMPurify.sanitize(userInput);
+}`;
+        }
+        
+        function loadInsecureExample() {
+            document.getElementById('codeInput').value = `// WARNING: This code contains security vulnerabilities
+const API_KEY = "sk-1234567890abcdef";
+const DB_PASSWORD = "admin123";
+
+function executeUserCode(userInput) {
+    // DANGEROUS: eval allows code injection
+    return eval(userInput);
+}
+
+function buildQuery(username) {
+    // DANGEROUS: SQL injection vulnerability
+    return "SELECT * FROM users WHERE name = '" + username + "'";
+}
+
+function renderContent(htmlContent) {
+    // DANGEROUS: XSS vulnerability
+    document.innerHTML = htmlContent;
+}`;
+        }
+        
+        function loadPerformanceExample() {
+            document.getElementById('codeInput').value = `function inefficientSearch(array, target) {
+    // Inefficient O(n²) nested loop
+    for (let i = 0; i < array.length; i++) {
+        for (let j = 0; j < array.length; j++) {
+            if (array[i] === target) {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
+function memoryLeak() {
+    // Creates memory leak with closures
+    const largeArray = new Array(1000000).fill('data');
+    return function() {
+        return largeArray.length;
+    };
+}`;
+        }
+        
+        async function analyzeCode() {
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            const resultsDiv = document.getElementById('analysisResults');
+            
+            const code = document.getElementById('codeInput').value.trim();
+            if (!code) {
+                alert('Please enter some code to analyze');
+                return;
+            }
+            
+            analyzeBtn.disabled = true;
+            analyzeBtn.textContent = '🔄 Analyzing...';
+            resultsDiv.style.display = 'block';
+            resultsDiv.className = 'results loading';
+            resultsDiv.textContent = 'Analyzing code with AI...';
+            
+            try {
+                const response = await fetch('/api/analyze-code', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        code: code,
+                        language: document.getElementById('languageSelect').value,
+                        repository: document.getElementById('repoInput').value,
+                        filePath: document.getElementById('filePathInput').value
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultsDiv.className = 'results success';
+                    resultsDiv.textContent = JSON.stringify(data, null, 2);
+                    
+                    // Add a summary at the top
+                    let summary = `✅ Analysis completed successfully!\n`;
+                    summary += `📝 Language: ${data.language}\n`;
+                    summary += `🔄 Source: ${data.source}\n`;
+                    
+                    if (data.suggestions && data.suggestions.length > 0) {
+                        summary += `💡 AI Suggestions: ${data.suggestions.length}\n`;
+                    }
+                    
+                    if (data.fallbackAnalysis) {
+                        const total = (data.fallbackAnalysis.security?.length || 0) + 
+                                     (data.fallbackAnalysis.quality?.length || 0) + 
+                                     (data.fallbackAnalysis.performance?.length || 0);
+                        summary += `🔍 Issues Found: ${total}\n`;
+                        if (data.fallbackAnalysis.security?.length > 0) {
+                            summary += `🛡️ Security Issues: ${data.fallbackAnalysis.security.length}\n`;
+                        }
+                    }
+                    
+                    summary += `\n--- Full Response ---\n`;
+                    resultsDiv.textContent = summary + JSON.stringify(data, null, 2);
+                } else {
+                    resultsDiv.className = 'results error';
+                    resultsDiv.textContent = `❌ Error: ${data.message || 'Unknown error'}`;
+                }
+            } catch (error) {
+                resultsDiv.className = 'results error';
+                resultsDiv.textContent = `❌ Network Error: ${error.message}`;
+            } finally {
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = '🔍 Analyze Code';
+            }
+        }
+        
+        async function fetchDashboard() {
+            const dashboardBtn = document.getElementById('dashboardBtn');
+            const resultsDiv = document.getElementById('dashboardResults');
+            
+            const repoList = document.getElementById('repoList').value.trim();
+            if (!repoList) {
+                alert('Please enter at least one repository');
+                return;
+            }
+            
+            const repositories = repoList.split('\n')
+                .map(repo => repo.trim())
+                .filter(repo => repo.length > 0);
+            
+            dashboardBtn.disabled = true;
+            dashboardBtn.textContent = '🔄 Fetching...';
+            resultsDiv.style.display = 'block';
+            resultsDiv.className = 'results loading';
+            resultsDiv.textContent = 'Fetching repository data from GitHub...';
+            
+            try {
+                const response = await fetch('/api/team-dashboard', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        repositories: repositories
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultsDiv.className = 'results success';
+                    
+                    // Add a summary at the top
+                    let summary = `✅ Dashboard data fetched successfully!\n`;
+                    summary += `📊 Total Repositories: ${data.summary.totalRepositories}\n`;
+                    summary += `✅ Successful Fetches: ${data.summary.successfulFetches}\n`;
+                    summary += `⭐ Total Stars: ${data.summary.totalStars.toLocaleString()}\n`;
+                    summary += `🍴 Total Forks: ${data.summary.totalForks.toLocaleString()}\n`;
+                    summary += `📋 Open Issues: ${data.summary.totalOpenIssues}\n`;
+                    summary += `🔀 Open PRs: ${data.summary.totalOpenPRs}\n`;
+                    summary += `🛡️ Security Alerts: ${data.summary.totalVulnerabilities}\n`;
+                    summary += `\n--- Full Response ---\n`;
+                    
+                    resultsDiv.textContent = summary + JSON.stringify(data, null, 2);
+                } else {
+                    resultsDiv.className = 'results error';
+                    resultsDiv.textContent = `❌ Error: ${data.message || 'Unknown error'}`;
+                }
+            } catch (error) {
+                resultsDiv.className = 'results error';
+                resultsDiv.textContent = `❌ Network Error: ${error.message}`;
+            } finally {
+                dashboardBtn.disabled = false;
+                dashboardBtn.textContent = '📊 Fetch Dashboard Data';
+            }
+        }
+    </script>
+</body>
+</html>
