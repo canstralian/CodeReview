@@ -47,13 +47,16 @@ export class ReplitAgentService {
   async createSession(userId: string, repositoryId?: number): Promise<string> {
     const sessionToken = nanoid(32);
     const expiresAt = new Date(Date.now() + this.SESSION_TTL);
+    const now = new Date();
 
     await db.insert(agentSessions).values({
       userId,
       sessionToken,
       repositoryId,
       status: "active",
-      context: { history: [] },
+      context: { history: [] } as any,
+      createdAt: now,
+      updatedAt: now,
       expiresAt,
     });
 
@@ -132,9 +135,10 @@ export class ReplitAgentService {
         request: request as any,
         response: {} as any,
         status: "processing",
+        createdAt: new Date(),
         metadata: {
           startTime: new Date().toISOString(),
-        },
+        } as any,
       })
       .returning();
 
@@ -168,7 +172,7 @@ export class ReplitAgentService {
           metadata: {
             startTime: interaction.metadata?.startTime,
             endTime: new Date().toISOString(),
-          },
+          } as any,
         })
         .where(eq(agentInteractions.id, interaction.id));
 
@@ -197,7 +201,7 @@ export class ReplitAgentService {
             startTime: interaction.metadata?.startTime,
             endTime: new Date().toISOString(),
             error: error instanceof Error ? error.message : "Unknown error",
-          },
+          } as any,
         })
         .where(eq(agentInteractions.id, interaction.id));
 
