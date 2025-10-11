@@ -85,7 +85,7 @@ export async function healthCheck(req: Request, res: Response): Promise<void> {
     checks,
   };
 
-  const statusCode = status === 'healthy' ? 200 : status === 'degraded' ? 200 : 503;
+  const statusCode = status === 'healthy' ? 200 : 503;
   res.status(statusCode).json(result);
 }
 

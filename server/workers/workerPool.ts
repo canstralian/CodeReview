@@ -60,7 +60,8 @@ export class WorkerPool {
     this.isRunning = false;
 
     // Stop all workers
-    for (const [workerId, worker] of this.workers) {
+    const workerIds = Array.from(this.workers.keys());
+    for (const workerId of workerIds) {
       await this.stopWorker(workerId);
     }
 
@@ -183,7 +184,8 @@ export class WorkerPool {
       console.error(`Task ${task.id} failed:`, error);
 
       // Retry logic
-      if (task.retries < this.config.retries) {
+      const maxRetries = 3; // Use a constant instead of config.retries
+      if (task.retries < maxRetries) {
         task.retries++;
         this.taskQueue.push(task);
         console.log(`Task ${task.id} requeued (retry ${task.retries})`);

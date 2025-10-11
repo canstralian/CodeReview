@@ -129,7 +129,7 @@ export class PrometheusClient {
   getMetrics(): string {
     let output = '';
 
-    for (const [name, metrics] of this.metrics) {
+    for (const [name, metrics] of Array.from(this.metrics.entries())) {
       const latest = metrics[metrics.length - 1];
       const labelsStr = latest.labels 
         ? Object.entries(latest.labels).map(([k, v]) => `${k}="${v}"`).join(',')

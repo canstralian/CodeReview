@@ -5,7 +5,11 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+
+// Simple UUID generator without external dependency
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
+}
 
 // Extend Express Request type to include requestId
 declare global {
@@ -22,7 +26,7 @@ declare global {
  */
 export function loggingMiddleware(req: Request, res: Response, next: NextFunction): void {
   // Generate unique request ID
-  req.requestId = uuidv4();
+  req.requestId = generateId();
   req.startTime = Date.now();
 
   // Log request
