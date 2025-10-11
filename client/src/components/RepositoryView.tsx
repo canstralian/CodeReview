@@ -4,6 +4,7 @@ import { formatDate, formatNumber } from "../lib/github";
 import FileExplorer from "./FileExplorer";
 import CodeViewer from "./CodeViewer";
 import IssuesList from "./IssuesList";
+import ReplitAgent from "./ReplitAgent";
 import { useMutation } from "@tanstack/react-query";
 import { getFileWithIssues } from "../lib/github";
 import { useToast } from "@/hooks/use-toast";
@@ -198,6 +199,16 @@ const RepositoryView: React.FC<RepositoryViewProps> = ({ data }) => {
                 issues={fileIssues} 
                 onFixIssue={handleFixIssue} 
               />
+              
+              {/* Replit Agent Integration */}
+              <div className="mt-6">
+                <ReplitAgent 
+                  code={selectedFile.content}
+                  filePath={selectedFile.filePath}
+                  language={selectedFile.language || undefined}
+                  repositoryId={repository.id}
+                />
+              </div>
             </>
           ) : (
             <div className="bg-white rounded-lg shadow-md p-10 text-center text-gray-500">

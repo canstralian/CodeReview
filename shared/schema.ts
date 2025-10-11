@@ -177,3 +177,61 @@ export const insertRepositoryFileSchema = createInsertSchema(repositoryFiles).om
 
 export type InsertRepositoryFile = z.infer<typeof insertRepositoryFileSchema>;
 export type RepositoryFile = typeof repositoryFiles.$inferSelect;
+
+// Replit Agent Sessions schema
+export const agentSessions = pgTable("agent_sessions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+  sessionToken: varchar("session_token").notNull().unique(),
+  repositoryId: integer("repository_id").references(() => repositories.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("active"), // 'active', 'completed', 'expired'
+  context: jsonb("context"), // Store session context and history
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+});
+
+export const agentSessionsRelations = relations(agentSessions, ({ one, many }) => ({
+  user: one(users, {
+    fields: [agentSessions.userId],
+    references: [users.id]
+  }),
+  repository: one(repositories, {
+    fields: [agentSessions.repositoryId],
+    references: [repositories.id]
+  }),
+  interactions: many(agentInteractions)
+}));
+
+export const insertAgentSessionSchema = createInsertSchema(agentSessions).omit({
+  id: true,
+});
+
+export type InsertAgentSession = z.infer<typeof insertAgentSessionSchema>;
+export type AgentSession = typeof agentSessions.$inferSelect;
+
+// Replit Agent Interactions schema
+export const agentInteractions = pgTable("agent_interactions", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => agentSessions.id, { onDelete: "cascade" }),
+  interactionType: text("interaction_type").notNull(), // 'code_analysis', 'query', 'refactor_suggestion', 'security_scan'
+  request: jsonb("request").notNull(), // User request/input
+  response: jsonb("response").notNull(), // Agent response/output
+  metadata: jsonb("metadata"), // Additional context, tokens used, etc.
+  status: text("status").notNull().default("completed"), // 'pending', 'processing', 'completed', 'failed'
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const agentInteractionsRelations = relations(agentInteractions, ({ one }) => ({
+  session: one(agentSessions, {
+    fields: [agentInteractions.sessionId],
+    references: [agentSessions.id]
+  })
+}));
+
+export const insertAgentInteractionSchema = createInsertSchema(agentInteractions).omit({
+  id: true,
+});
+
+export type InsertAgentInteraction = z.infer<typeof insertAgentInteractionSchema>;
+export type AgentInteraction = typeof agentInteractions.$inferSelect;
