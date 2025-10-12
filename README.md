@@ -7,6 +7,7 @@ A Google-inspired web-based code review and debugging tool for GitHub repositori
 - **Simple, Clean Interface**: A Google-inspired minimalist design with a central search bar
 - **Repository Analysis**: Scan GitHub repositories for code issues and potential bugs
 - **Multi-Category Issue Detection**: Identifies issues across security, performance, code quality, and accessibility
+- **AI-Powered Code Analysis**: Uses Claude AI with prompt caching for fast, cost-effective code suggestions
 - **Code Fixing Suggestions**: Provides actionable recommendations to fix identified issues
 - **File Explorer**: Browse repository files with an intuitive tree structure
 - **Categorized Issues View**: Filter issues by type and severity
@@ -42,6 +43,8 @@ A Google-inspired web-based code review and debugging tool for GitHub repositori
    Create a `.env` file in the root directory with the following variables:
    ```
    DATABASE_URL=postgresql://username:password@localhost:5432/codereview
+   ANTHROPIC_API_KEY=sk-ant-xxxxx  # Get from https://console.anthropic.com/
+   GITHUB_TOKEN=ghp_xxxxx          # Optional, for team dashboard features
    ```
 
 4. Set up the database:
@@ -61,8 +64,23 @@ A Google-inspired web-based code review and debugging tool for GitHub repositori
 1. Enter a GitHub repository URL in the search bar
 2. Click on "Review Code" to analyze the repository for issues
 3. Browse the file explorer to view specific files
-4. Click on issues to see suggestions on how to fix them
+4. Click on issues to see AI-powered suggestions on how to fix them
 5. Apply fixes directly with the "Apply Fix" button
+
+### AI Features
+
+The application uses Anthropic's Claude AI with **prompt caching** to provide fast, cost-effective code analysis:
+
+- **Reduced Latency**: Cached system prompts reduce response times
+- **Lower Costs**: Cached tokens are ~10% of regular token costs
+- **Language-Specific Analysis**: Automatically detects and caches context for each language
+
+To test the caching behavior:
+```bash
+node scripts/demo-prompt-caching.js
+```
+
+See [docs/PROMPT_CACHING.md](docs/PROMPT_CACHING.md) for detailed documentation.
 
 ## Deployment
 
