@@ -815,19 +815,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create prompt for Claude
-      const prompt = `Analyze the following ${detectedLanguage} code and provide detailed suggestions for improvement. Focus on:
+      // Create system instructions that can be cached
+      const systemInstructions = `You are an AI assistant tasked with analyzing code and providing detailed suggestions for improvement. Your goal is to provide insightful commentary on code quality, security, performance, and best practices.
 
+Focus on:
 1. Security vulnerabilities and fixes
 2. Performance optimizations
 3. Code quality improvements
 4. Bug detection and fixes
 5. Best practices and refactoring opportunities
-
-Code:
-\`\`\`${detectedLanguage}
-${code}
-\`\`\`
 
 Respond with a JSON object containing an array of suggestions. Each suggestion should have:
 - suggestion: A clear, actionable improvement suggestion
@@ -849,17 +845,31 @@ Example format:
   ]
 }`;
 
-      // Call Claude API
+      // Call Claude API with prompt caching
       const response = await anthropic.messages.create({
-        model: "claude-3-sonnet-20240229",
+        model: "claude-3-5-sonnet-20241022",
         max_tokens: 4000,
+        system: [
+          {
+            type: "text",
+            text: systemInstructions,
+          },
+          {
+            type: "text",
+            text: `Language: ${detectedLanguage}`,
+            cache_control: { type: "ephemeral" }
+          }
+        ],
         messages: [
           {
             role: "user",
-            content: prompt
+            content: `Analyze the following ${detectedLanguage} code:\n\n\`\`\`${detectedLanguage}\n${code}\n\`\`\``
           }
         ]
       });
+
+      // Log cache usage statistics
+      console.log("API Usage:", JSON.stringify(response.usage, null, 2));
 
       // Parse Claude's response
       let suggestions = [];
