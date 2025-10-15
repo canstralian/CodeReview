@@ -7,7 +7,7 @@ and Pydantic BaseSettings for secure configuration management.
 
 import os
 from typing import List, Optional
-from pydantic import Field, PostgresDsn, validator
+from pydantic import Field, PostgresDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -102,31 +102,35 @@ class Settings(BaseSettings):
         extra="ignore"
     )
     
-    @validator("allowed_origins", pre=True)
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
     def parse_cors_origins(cls, v):
         """Parse CORS origins from string or list."""
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",")]
         return v
     
-    @validator("allowed_hosts", pre=True)
+    @field_validator("allowed_hosts", mode="before")
+    @classmethod
     def parse_allowed_hosts(cls, v):
         """Parse allowed hosts from string or list."""
         if isinstance(v, str):
             return [host.strip() for host in v.split(",")]
         return v
     
-    @validator("secret_key")
-    def validate_secret_key(cls, v, values):
+    @field_validator("secret_key")
+    @classmethod
+    def validate_secret_key(cls, v, info):
         """Ensure secret key is changed in production."""
-        if values.get("environment") == "production" and v == "change-me-in-production":
+        if info.data.get("environment") == "production" and v == "change-me-in-production":
             raise ValueError("SECRET_KEY must be changed in production environment")
         return v
     
-    @validator("anthropic_api_key")
-    def validate_anthropic_key(cls, v, values):
+    @field_validator("anthropic_api_key")
+    @classmethod
+    def validate_anthropic_key(cls, v, info):
         """Warn if Anthropic API key is not set."""
-        if not v and values.get("environment") == "production":
+        if not v and info.data.get("environment") == "production":
             import warnings
             warnings.warn("ANTHROPIC_API_KEY is not set. AI features will be disabled.")
         return v
