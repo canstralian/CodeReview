@@ -1,36 +1,37 @@
-# Docker Compose Configuration for CodeReview AI
+# Docker Compose Configuration for CodeReview FastAPI
 # This file defines the complete infrastructure for local development
 
 version: '3.8'
 
 services:
-  # Main Application
-  app:
+  # FastAPI Application
+  api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.fastapi
     ports:
-      - "5000:5000"
+      - "8000:8000"
     environment:
-      NODE_ENV: production
+      ENVIRONMENT: development
       DATABASE_URL: postgresql://codereview:password@postgres:5432/codereview
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      QUEUE_TYPE: rabbitmq
-      QUEUE_URL: amqp://rabbitmq
-      SENTRY_DSN: ${SENTRY_DSN}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
+      SECRET_KEY: ${SECRET_KEY:-development-secret-key-change-in-production}
+      LOG_LEVEL: INFO
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
     restart: unless-stopped
     networks:
       - codereview-network
+    volumes:
+      - ./app:/app/app:ro  # Mount for development
 
   # PostgreSQL Database
   postgres:
@@ -69,25 +70,29 @@ services:
     networks:
       - codereview-network
 
-  # RabbitMQ Message Queue
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    ports:
-      - "5672:5672"   # AMQP port
-      - "15672:15672" # Management UI
+  # Celery Worker for Async Tasks
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    command: celery -A app.services.celery_app worker --loglevel=info
     environment:
-      RABBITMQ_DEFAULT_USER: codereview
-      RABBITMQ_DEFAULT_PASS: password
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql://codereview:password@postgres:5432/codereview
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+    depends_on:
+      - postgres
+      - redis
     restart: unless-stopped
     networks:
       - codereview-network
+    volumes:
+      - ./app:/app/app:ro
 
   # Prometheus Monitoring
   prometheus:
@@ -120,36 +125,31 @@ services:
     networks:
       - codereview-network
 
-  # Worker Pool (for analysis tasks)
-  worker:
+  # AI Analysis Microservice
+  ai-service:
     build:
       context: .
-      dockerfile: Dockerfile.worker
+      dockerfile: Dockerfile.fastapi
+    command: uvicorn app.services.ai_service:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
     environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://codereview:password@postgres:5432/codereview
+      ENVIRONMENT: development
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      QUEUE_TYPE: rabbitmq
-      QUEUE_URL: amqp://rabbitmq
+      LOG_LEVEL: INFO
     depends_on:
-      - postgres
       - redis
-      - rabbitmq
     restart: unless-stopped
-    deploy:
-      replicas: 2
-      resources:
-        limits:
-          cpus: '1'
-          memory: 2G
     networks:
       - codereview-network
+    volumes:
+      - ./app:/app/app:ro
 
 volumes:
   postgres-data:
   redis-data:
-  rabbitmq-data:
   prometheus-data:
   grafana-data:
 

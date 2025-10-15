@@ -5,16 +5,34 @@ yarn-debug.log*
 yarn-error.log*
 package-lock.json
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
 # Build output
 dist
 build
 *.tsbuildinfo
 server/public
+*.egg-info/
 
 # Environment files
 .env
 .env.local
 .env.production
+.env.staging
 .env.test
 
 # OS files
@@ -42,6 +60,11 @@ pids
 # Test coverage
 coverage
 .nyc_output
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
 
 # Temporary files
 tmp
@@ -61,3 +84,23 @@ vite.config.ts.*
 # Miscellaneous
 .cache
 .parcel-cache
+
+# FastAPI specific
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.hypothesis/
+celerybeat-schedule
+celerybeat.pid
+
+# Security and SBOM
+bandit-report.json
+sbom.json
+trivy-results.sarif
+
+# Alembic
+alembic/versions/*.pyc
