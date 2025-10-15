@@ -2153,7 +2153,7 @@ Example format:
       }
       
       // Validate code size if provided
-      if (code && typeof code === 'string' && code.length > 100000) {
+      if (code && typeof code === 'string' && Buffer.byteLength(code, 'utf8') > 100 * 1024) {
         return res.status(400).json({
           message: "Code is too large. Maximum size is 100KB",
           error: "CODE_TOO_LARGE"
