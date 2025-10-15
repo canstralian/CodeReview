@@ -2058,10 +2058,52 @@ Example format:
    */
   app.post("/api/agent/session", rateLimitMiddleware, async (req, res) => {
     try {
-      const { repositoryId } = req.body;
+      const { repositoryId, captchaToken } = req.body;
       
       // Get user ID from session (if authenticated)
       const userId = (req.user as any)?.claims?.sub || 'anonymous';
+      
+      // If user is anonymous, require CAPTCHA validation
+      if (userId === 'anonymous') {
+        if (!captchaToken) {
+          return res.status(400).json({
+            message: "CAPTCHA token required for anonymous session creation",
+            error: "CAPTCHA_REQUIRED"
+          });
+        }
+        // Verify CAPTCHA token with Google reCAPTCHA
+        const secret = process.env.RECAPTCHA_SECRET_KEY;
+        if (!secret) {
+          return res.status(500).json({
+            message: "CAPTCHA secret key not configured",
+            error: "CONFIG_ERROR"
+          });
+        }
+        try {
+          const verifyResponse = await axios.post(
+            `https://www.google.com/recaptcha/api/siteverify`,
+            null,
+            {
+              params: {
+                secret,
+                response: captchaToken,
+                remoteip: req.ip
+              }
+            }
+          );
+          if (!verifyResponse.data.success) {
+            return res.status(403).json({
+              message: "CAPTCHA verification failed",
+              error: "CAPTCHA_FAILED"
+            });
+          }
+        } catch (captchaError) {
+          return res.status(500).json({
+            message: "Error verifying CAPTCHA",
+            error: "CAPTCHA_ERROR"
+          });
+        }
+      }
       
       // Validate repositoryId if provided
       if (repositoryId && typeof repositoryId !== 'number') {
