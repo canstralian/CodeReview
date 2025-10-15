@@ -18,7 +18,7 @@ import logging
 
 from app.core import settings, AppException, ErrorResponse, SECURITY_HEADERS
 from app.db import init_db, close_db
-from app.api.endpoints import health, repositories
+from app.api.endpoints import health, repositories, metrics, analysis
 
 
 # Configure logging
@@ -277,6 +277,15 @@ app.include_router(
     prefix=settings.api_prefix,
     tags=["Repositories"]
 )
+app.include_router(
+    analysis.router,
+    prefix=settings.api_prefix,
+    tags=["Analysis"]
+)
+
+# Metrics endpoint (no prefix to match Prometheus convention)
+if settings.prometheus_enabled:
+    app.include_router(metrics.router, tags=["Monitoring"])
 
 
 # Root endpoint

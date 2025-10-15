@@ -104,4 +104,4 @@ celerybeat.pid
 alembic/versions/*.pyc
 
 # FastAPI
-openapi.json
+openapi.json.env.production
