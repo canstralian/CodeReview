@@ -10,6 +10,11 @@ A Google-inspired web-based code review and debugging tool for GitHub repositori
 - **Code Fixing Suggestions**: Provides actionable recommendations to fix identified issues
 - **File Explorer**: Browse repository files with an intuitive tree structure
 - **Categorized Issues View**: Filter issues by type and severity
+- **🆕 Replit AI Agent**: Interactive AI assistant for deeper code analysis, explanations, and refactoring suggestions
+  - Context-aware conversations about your code
+  - Multi-step reasoning and extended work sessions
+  - Security scanning and vulnerability detection
+  - Refactoring recommendations with examples
 
 ## Technologies
 
@@ -42,11 +47,19 @@ A Google-inspired web-based code review and debugging tool for GitHub repositori
    Create a `.env` file in the root directory with the following variables:
    ```
    DATABASE_URL=postgresql://username:password@localhost:5432/codereview
+   ANTHROPIC_API_KEY=your_anthropic_api_key_here
+   GITHUB_TOKEN=your_github_token_here
+   SESSION_SECRET=your_random_session_secret
+   REPLIT_DOMAINS=your-domain.repl.co
+   REPL_ID=your_repl_id
    ```
+   See `.env.example` for a complete list of configuration options.
 
 4. Set up the database:
    ```bash
    npm run db:push
+   # For Replit Agent tables:
+   npx tsx scripts/migrate-agent-tables.ts
    ```
 
 5. Start the development server:
@@ -63,6 +76,12 @@ A Google-inspired web-based code review and debugging tool for GitHub repositori
 3. Browse the file explorer to view specific files
 4. Click on issues to see suggestions on how to fix them
 5. Apply fixes directly with the "Apply Fix" button
+6. **Use the Replit AI Agent** for deeper analysis:
+   - Click "Start AI Session" in the agent panel
+   - Ask questions about your code
+   - Request refactoring suggestions
+   - Perform security scans
+   - Get context-aware explanations
 
 ## Deployment
 
@@ -92,13 +111,45 @@ This project is set up for easy deployment on platforms that support Node.js app
 ├── server/              # Backend Express server
 │   ├── index.ts         # Server entry point
 │   ├── routes.ts        # API routes
+│   ├── services/        # Business logic services
+│   │   ├── replitAgent.ts  # Replit Agent integration
+│   │   ├── aiSuggestions.ts # AI suggestions service
+│   │   └── ...
 │   ├── storage.ts       # Data storage interface
 │   └── db.ts            # Database connection
 ├── shared/              # Shared code between client and server
 │   └── schema.ts        # Database schema and types
 ├── docs/                # Documentation
+│   ├── REPLIT_AGENT_INTEGRATION.md  # Agent integration guide
+│   └── ...
 └── .github/             # GitHub workflows and templates
 ```
+
+## Replit AI Agent
+
+The Replit AI Agent provides advanced code analysis capabilities with context-aware conversations:
+
+### Features
+- **Code Analysis**: Deep analysis of code quality, bugs, and potential issues
+- **Interactive Q&A**: Ask questions about your code and get detailed explanations
+- **Refactoring Suggestions**: Get recommendations with code examples
+- **Security Scanning**: Identify vulnerabilities and remediation steps
+- **Session Management**: Maintains context across multiple interactions
+
+### API Endpoints
+- `POST /api/agent/session` - Create a new agent session
+- `POST /api/agent/process` - Process agent requests
+- `GET /api/agent/session/:token/history` - Get session history
+- `POST /api/agent/session/:token/close` - Close a session
+
+### Security Features
+- Rate limiting (30 requests/minute)
+- Input validation and sanitization
+- Session-based authentication
+- 24-hour session expiration
+- Comprehensive audit logging
+
+For detailed documentation, see [docs/REPLIT_AGENT_INTEGRATION.md](docs/REPLIT_AGENT_INTEGRATION.md).
 
 ## Contributing
 

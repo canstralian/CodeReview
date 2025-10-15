@@ -86,6 +86,52 @@ async function main() {
     `);
     console.log("Created repository_files table");
     
+    // Create agent_sessions table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS agent_sessions (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+        session_token VARCHAR NOT NULL UNIQUE,
+        repository_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'active',
+        context JSONB,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        expires_at TIMESTAMP
+      );
+    `);
+    console.log("Created agent_sessions table");
+    
+    // Create agent_interactions table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS agent_interactions (
+        id SERIAL PRIMARY KEY,
+        session_id INTEGER NOT NULL REFERENCES agent_sessions(id) ON DELETE CASCADE,
+        interaction_type TEXT NOT NULL,
+        request JSONB NOT NULL,
+        response JSONB NOT NULL,
+        metadata JSONB,
+        status TEXT NOT NULL DEFAULT 'completed',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    console.log("Created agent_interactions table");
+    
+    // Create indexes for agent tables
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_agent_sessions_token 
+      ON agent_sessions(session_token);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_agent_sessions_user 
+      ON agent_sessions(user_id);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_agent_interactions_session 
+      ON agent_interactions(session_id);
+    `);
+    console.log("Created indexes for agent tables");
+    
     console.log("Schema push completed successfully!");
     await client.end();
   } catch (error) {

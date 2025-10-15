@@ -8,6 +8,7 @@ import GitHubClient from "./services/githubClient";
 import { SecurityScanner } from "./services/securityScanner";
 import { AISuggestionsService } from "./services/aiSuggestions";
 import { QualityTrendsService } from "./services/qualityTrends";
+import { ReplitAgentService } from "./services/replitAgent";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { storage } from "./storage";
@@ -50,6 +51,39 @@ const githubClient = new GitHubClient();
 const securityScanner = new SecurityScanner();
 const aiSuggestionsService = new AISuggestionsService();
 const qualityTrendsService = new QualityTrendsService();
+const replitAgentService = new ReplitAgentService();
+
+// -------------------------------------------------------------------------------------
+// Simple rate limiting middleware for agent endpoints
+// -------------------------------------------------------------------------------------
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 30; // 30 requests per minute
+
+function rateLimitMiddleware(req: Request, res: Response, next: NextFunction) {
+  const identifier = req.ip || 'unknown';
+  const now = Date.now();
+  
+  const userLimit = rateLimitMap.get(identifier);
+  
+  if (!userLimit || now > userLimit.resetTime) {
+    rateLimitMap.set(identifier, {
+      count: 1,
+      resetTime: now + RATE_LIMIT_WINDOW
+    });
+    return next();
+  }
+  
+  if (userLimit.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return res.status(429).json({
+      message: "Rate limit exceeded. Please try again later.",
+      error: "RATE_LIMIT_EXCEEDED"
+    });
+  }
+  
+  userLimit.count++;
+  next();
+}
 
 // -------------------------------------------------------------------------------------
 // Splits the code by newline and finds the first line index where `searchedSubstring`
@@ -2013,6 +2047,196 @@ Example format:
       duplicateCodePercentage: Math.round(duplicatePercentage * 10) / 10
     };
   }
+
+  // -------------------------------------------------------------------------------------
+  // Replit Agent API Endpoints
+  // -------------------------------------------------------------------------------------
+
+  /**
+   * Create a new agent session
+   * POST /api/agent/session
+   */
+  app.post("/api/agent/session", rateLimitMiddleware, async (req, res) => {
+    try {
+      const { repositoryId } = req.body;
+      
+      // Get user ID from session (if authenticated)
+      const userId = (req.user as any)?.claims?.sub || 'anonymous';
+      
+      // Validate repositoryId if provided
+      if (repositoryId && typeof repositoryId !== 'number') {
+        return res.status(400).json({
+          message: "Invalid repository ID",
+          error: "INVALID_INPUT"
+        });
+      }
+      
+      const sessionToken = await replitAgentService.createSession(userId, repositoryId);
+      
+      return res.json({
+        sessionToken,
+        message: "Agent session created successfully",
+        expiresIn: "24 hours"
+      });
+    } catch (error) {
+      console.error("Error creating agent session:", error);
+      return res.status(500).json({
+        message: "Failed to create agent session",
+        error: "INTERNAL_ERROR"
+      });
+    }
+  });
+
+  /**
+   * Process agent request
+   * POST /api/agent/process
+   */
+  app.post("/api/agent/process", rateLimitMiddleware, async (req, res) => {
+    try {
+      const { sessionToken, action, code, filePath, language, query } = req.body;
+      
+      // Input validation
+      if (!sessionToken || typeof sessionToken !== 'string') {
+        return res.status(400).json({
+          message: "Session token is required",
+          error: "INVALID_INPUT"
+        });
+      }
+      
+      if (!action || !['analyze', 'query', 'refactor', 'security_scan'].includes(action)) {
+        return res.status(400).json({
+          message: "Invalid action. Must be one of: analyze, query, refactor, security_scan",
+          error: "INVALID_ACTION"
+        });
+      }
+      
+      // Validate code size if provided
+      if (code && typeof code === 'string' && code.length > 100000) {
+        return res.status(400).json({
+          message: "Code is too large. Maximum size is 100KB",
+          error: "CODE_TOO_LARGE"
+        });
+      }
+      
+      // Sanitize inputs
+      const sanitizedRequest = {
+        action,
+        code: code ? String(code).trim() : undefined,
+        filePath: filePath ? String(filePath).trim() : undefined,
+        language: language ? String(language).trim() : undefined,
+        query: query ? String(query).trim() : undefined,
+      };
+      
+      // Validate required fields based on action
+      if (action === 'query' && !sanitizedRequest.query) {
+        return res.status(400).json({
+          message: "Query is required for 'query' action",
+          error: "MISSING_QUERY"
+        });
+      }
+      
+      if (['analyze', 'refactor', 'security_scan'].includes(action) && !sanitizedRequest.code) {
+        return res.status(400).json({
+          message: "Code is required for this action",
+          error: "MISSING_CODE"
+        });
+      }
+      
+      // Process the request
+      const response = await replitAgentService.processRequest(sessionToken, sanitizedRequest);
+      
+      return res.json({
+        success: true,
+        data: response,
+        sessionToken,
+      });
+    } catch (error) {
+      console.error("Error processing agent request:", error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes("Session not found") || error.message.includes("expired")) {
+          return res.status(401).json({
+            message: error.message,
+            error: "INVALID_SESSION"
+          });
+        }
+      }
+      
+      return res.status(500).json({
+        message: "Failed to process agent request",
+        error: "INTERNAL_ERROR"
+      });
+    }
+  });
+
+  /**
+   * Get agent session history
+   * GET /api/agent/session/:sessionToken/history
+   */
+  app.get("/api/agent/session/:sessionToken/history", rateLimitMiddleware, async (req, res) => {
+    try {
+      const { sessionToken } = req.params;
+      
+      if (!sessionToken) {
+        return res.status(400).json({
+          message: "Session token is required",
+          error: "INVALID_INPUT"
+        });
+      }
+      
+      const history = await replitAgentService.getSessionHistory(sessionToken);
+      
+      return res.json({
+        success: true,
+        data: history,
+      });
+    } catch (error) {
+      console.error("Error fetching session history:", error);
+      
+      if (error instanceof Error && error.message.includes("Session not found")) {
+        return res.status(404).json({
+          message: "Session not found",
+          error: "SESSION_NOT_FOUND"
+        });
+      }
+      
+      return res.status(500).json({
+        message: "Failed to fetch session history",
+        error: "INTERNAL_ERROR"
+      });
+    }
+  });
+
+  /**
+   * Close agent session
+   * POST /api/agent/session/:sessionToken/close
+   */
+  app.post("/api/agent/session/:sessionToken/close", rateLimitMiddleware, async (req, res) => {
+    try {
+      const { sessionToken } = req.params;
+      
+      if (!sessionToken) {
+        return res.status(400).json({
+          message: "Session token is required",
+          error: "INVALID_INPUT"
+        });
+      }
+      
+      await replitAgentService.closeSession(sessionToken);
+      
+      return res.json({
+        success: true,
+        message: "Session closed successfully"
+      });
+    } catch (error) {
+      console.error("Error closing session:", error);
+      
+      return res.status(500).json({
+        message: "Failed to close session",
+        error: "INTERNAL_ERROR"
+      });
+    }
+  });
 
   return httpServer;
 }
