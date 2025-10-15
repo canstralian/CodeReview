@@ -399,7 +399,18 @@ Format as JSON:
       : "";
 
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { refactoringSuggestions: [] };
+    let result;
+    if (jsonMatch) {
+      try {
+        result = JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        // Optionally log the error for debugging
+        console.error("Failed to parse refactoring suggestions JSON:", e);
+        result = { refactoringSuggestions: [] };
+      }
+    } else {
+      result = { refactoringSuggestions: [] };
+    }
 
     return {
       refactoringSuggestions: result.refactoringSuggestions,
