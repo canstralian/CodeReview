@@ -1,16 +1,58 @@
-# Core Dependencies
-Flask>=2.2.5                  # Secure, up-to-date Flask framework
-psycopg2-binary==2.9.6        # PostgreSQL adapter
-gunicorn==22.0.0              # Production WSGI server
-python-dotenv==1.0.0          # Secure environment variable management
-requests==2.32.4              # HTTP client, up-to-date for security
-Werkzeug>=3.0.6               # Flask dependency, upgraded for security fixes
-itsdangerous>=2.1.2           # Used by Flask for security
-click==8.1.6                  # Flask CLI dependency
+# FastAPI Backend Dependencies
+# Core framework and async support
+
+# FastAPI Framework
+fastapi>=0.109.0              # Modern, fast web framework
+uvicorn[standard]>=0.27.0     # ASGI server with auto-reload and websocket support
+pydantic>=2.5.0               # Data validation using Python type hints
+pydantic-settings>=2.1.0      # Settings management with Pydantic
+
+# Database - Async SQLAlchemy with PostgreSQL
+sqlalchemy>=2.0.25            # SQL toolkit and ORM
+asyncpg>=0.29.0               # Async PostgreSQL driver
+alembic>=1.13.0               # Database migrations
+psycopg2-binary>=2.9.9        # PostgreSQL adapter (for compatibility)
+
+# Redis Cache
+redis>=5.0.1                  # Redis client for caching
+
+# AI Services
+anthropic>=0.8.0              # Anthropic Claude API client
+httpx>=0.26.0                 # HTTP client for async requests
+
+# Security
+python-jose[cryptography]>=3.3.0  # JWT token handling
+passlib[bcrypt]>=1.7.4        # Password hashing
+python-multipart>=0.0.6       # Form parsing
+
+# Environment Management
+python-dotenv>=1.0.0          # Environment variable management
+
+# Monitoring and Observability
+prometheus-client>=0.19.0     # Prometheus metrics
+opentelemetry-api>=1.22.0     # OpenTelemetry API
+opentelemetry-sdk>=1.22.0     # OpenTelemetry SDK
+opentelemetry-instrumentation-fastapi>=0.43b0  # FastAPI instrumentation
+sentry-sdk[fastapi]>=1.39.0   # Sentry error tracking
+
+# Task Queue (optional)
+celery>=5.3.4                 # Distributed task queue
+kombu>=5.3.4                  # Messaging library for Celery
 
 # Development and Testing
-pytest==7.4.0                 # Testing framework
-coverage==6.5.0               # Test coverage reporting
-pytest-cov==4.0.0             # Pytest plugin for coverage
-flake8==6.1.0                 # Linter for PEP 8 compliance
-bandit==1.7.5                 # Security vulnerability scanner
+pytest>=7.4.0                 # Testing framework
+pytest-asyncio>=0.23.0        # Async test support
+pytest-cov>=4.1.0             # Test coverage
+httpx>=0.26.0                 # HTTP client for testing
+coverage>=7.4.0               # Test coverage reporting
+
+# Code Quality and Security
+black>=23.12.0                # Code formatter
+isort>=5.13.0                 # Import sorting
+flake8>=7.0.0                 # Linter for PEP 8 compliance
+mypy>=1.8.0                   # Static type checking
+bandit>=1.7.6                 # Security vulnerability scanner
+pylint>=3.0.0                 # Code analysis
+
+# Pre-commit hooks
+pre-commit>=3.6.0             # Git pre-commit hooks framework
