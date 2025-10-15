@@ -49,7 +49,12 @@ jobs:
           pip install pylint pytest
       - name: Lint with Pylint
         run: |
-          find . -name "*.py" -print0 | xargs -0 pylint --fail-under=8.0
+          python_files=$(find . -name "*.py" -print)
+          if [ -z "$python_files" ]; then
+            echo "No Python files found to lint. Skipping step."
+            exit 0
+          fi
+          echo "$python_files" | xargs pylint --fail-under=8.0
       - name: Run tests with pytest
         run: pytest --maxfail=1 --disable-warnings --cov=./
       - name: Upload coverage to Codecov
