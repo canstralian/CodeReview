@@ -274,7 +274,18 @@ Format your response as JSON with the following structure:
 
     // Parse JSON response
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { analysis: {}, suggestions: [] };
+    let analysis;
+    if (jsonMatch) {
+      try {
+        analysis = JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        // Optionally log the error for debugging
+        console.error("Failed to parse AI JSON response:", e, "Response:", jsonMatch[0]);
+        analysis = { analysis: {}, suggestions: [] };
+      }
+    } else {
+      analysis = { analysis: {}, suggestions: [] };
+    }
 
     return {
       analysis: analysis.analysis,
