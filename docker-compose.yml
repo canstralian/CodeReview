@@ -4,7 +4,7 @@
 version: '3.8'
 
 services:
-  # Main Application
+  # Main Application (Node.js/Express)
   app:
     build:
       context: .
@@ -21,6 +21,35 @@ services:
       SENTRY_DSN: ${SENTRY_DSN}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - codereview-network
+
+  # FastAPI Backend
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    ports:
+      - "8000:8000"
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://codereview:password@postgres:5432/codereview
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QUEUE_TYPE: rabbitmq
+      QUEUE_URL: amqp://rabbitmq
+      SENTRY_DSN: ${SENTRY_DSN}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
     depends_on:
       postgres:
         condition: service_healthy
