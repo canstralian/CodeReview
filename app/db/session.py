@@ -32,17 +32,28 @@ def create_database_engine() -> AsyncEngine:
     Returns:
         AsyncEngine: Configured async database engine
     """
-    # Use NullPool for testing, QueuePool for production
-    poolclass = NullPool if settings.environment == "testing" else QueuePool
+    # Use NullPool for testing/SQLite, QueuePool for PostgreSQL
+    is_sqlite = settings.database_url.startswith("sqlite")
+    poolclass = NullPool if (settings.environment == "testing" or is_sqlite) else QueuePool
+    
+    # Configure engine arguments based on database type
+    engine_args = {
+        "echo": settings.db_echo,
+        "poolclass": poolclass,
+    }
+    
+    # Only add pool settings for non-SQLite databases
+    if not is_sqlite:
+        engine_args.update({
+            "pool_size": settings.db_pool_size,
+            "max_overflow": settings.db_max_overflow,
+            "pool_timeout": settings.db_pool_timeout,
+            "pool_pre_ping": True,  # Verify connections before using
+        })
     
     engine = create_async_engine(
         settings.database_url,
-        echo=settings.db_echo,
-        pool_size=settings.db_pool_size,
-        max_overflow=settings.db_max_overflow,
-        pool_timeout=settings.db_pool_timeout,
-        pool_pre_ping=True,  # Verify connections before using
-        poolclass=poolclass,
+        **engine_args
     )
     
     return engine
