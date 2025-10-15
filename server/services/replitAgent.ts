@@ -478,7 +478,21 @@ Format as JSON:
       : "";
 
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { securityIssues: [] };
+    let result = { securityIssues: [] };
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (
+          parsed &&
+          typeof parsed === "object" &&
+          Array.isArray(parsed.securityIssues)
+        ) {
+          result = parsed;
+        }
+      } catch (e) {
+        // Parsing failed, keep default result
+      }
+    }
 
     return {
       securityIssues: result.securityIssues,
