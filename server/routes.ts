@@ -920,23 +920,23 @@ Example format:
 
     } catch (error) {
       console.error("Error in AI code analysis:", error);
-      
+
       // Provide helpful error messages based on error type
-      if (error.message?.includes('API key')) {
-        return res.status(401).json({ 
+      if (error instanceof Error && error.message?.includes('API key')) {
+        return res.status(401).json({
           message: "AI service authentication failed",
           error: "API_AUTH_FAILED"
         });
       }
-      
-      if (error.message?.includes('rate limit')) {
-        return res.status(429).json({ 
+
+      if (error instanceof Error && error.message?.includes('rate limit')) {
+        return res.status(429).json({
           message: "AI service rate limit exceeded. Please try again later.",
           error: "RATE_LIMIT_EXCEEDED"
         });
       }
 
-      return res.status(500).json({ 
+      return res.status(500).json({
         message: "Internal server error during code analysis",
         error: "INTERNAL_ERROR"
       });
@@ -1140,16 +1140,16 @@ Example format:
 
     } catch (error) {
       console.error("Error in team dashboard:", error);
-      
+
       // Provide helpful error messages
-      if (error.message?.includes('rate limit')) {
+      if (error instanceof Error && error.message?.includes('rate limit')) {
         return res.status(429).json({
           message: "GitHub API rate limit exceeded. Please try again later.",
           error: "RATE_LIMIT_EXCEEDED"
         });
       }
 
-      if (error.message?.includes('Bad credentials')) {
+      if (error instanceof Error && error.message?.includes('Bad credentials')) {
         return res.status(401).json({
           message: "GitHub authentication failed. Please check your token.",
           error: "GITHUB_AUTH_FAILED"
