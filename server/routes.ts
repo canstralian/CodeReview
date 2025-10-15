@@ -733,9 +733,65 @@ async function generateRealFiles(repositoryId: number, owner: string, repo: stri
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
-  // Health check endpoint
+  // Import health check and database metrics
+  const { healthCheck, readinessCheck, livenessCheck } = await import('./monitoring/healthCheck');
+  const { getDatabaseMetrics, stressTestDatabase } = await import('./monitoring/databaseMetrics');
+
+  // Health check endpoint - comprehensive system health
+  app.get("/health", healthCheck);
+
+  // Kubernetes readiness check
+  app.get("/health/ready", readinessCheck);
+
+  // Kubernetes liveness check
+  app.get("/health/live", livenessCheck);
+
+  // Legacy health check endpoint for backward compatibility
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Database metrics endpoint
+  app.get("/api/database-metrics", async (req, res) => {
+    try {
+      const metrics = await getDatabaseMetrics();
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error getting database metrics:", error);
+      res.status(500).json({ 
+        error: "Failed to retrieve database metrics",
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Database stress test endpoint (for load testing)
+  app.post("/api/database-stress-test", async (req, res) => {
+    try {
+      const { concurrentQueries = 10, duration = 10000, queryDelay = 100 } = req.body;
+      
+      // Validate inputs
+      if (concurrentQueries < 1 || concurrentQueries > 100) {
+        return res.status(400).json({ error: "concurrentQueries must be between 1 and 100" });
+      }
+      if (duration < 1000 || duration > 60000) {
+        return res.status(400).json({ error: "duration must be between 1000 and 60000 milliseconds" });
+      }
+      
+      const results = await stressTestDatabase({
+        concurrentQueries,
+        duration,
+        queryDelay,
+      });
+      
+      res.json(results);
+    } catch (error) {
+      console.error("Error running database stress test:", error);
+      res.status(500).json({ 
+        error: "Failed to run stress test",
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
   });
 
   // Database health check
