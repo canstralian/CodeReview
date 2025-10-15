@@ -7,6 +7,7 @@ import EmptyState from "../components/EmptyState";
 import LoadingState from "../components/LoadingState";
 import RepositoryView from "../components/RepositoryView";
 import Footer from "../components/Footer";
+import ConversationHighlights from "../components/ConversationHighlights";
 import type { RepositoryAnalysisResponse } from "../types";
 import { useToast } from "@/hooks/use-toast";
 
@@ -85,7 +86,12 @@ export default function Home() {
           
           {analyzeRepoMutation.isPending && <LoadingState />}
           
-          {!analyzeRepoMutation.isPending && !repositoryData && <EmptyState hasError={hasError} />}
+          {!analyzeRepoMutation.isPending && !repositoryData && (
+            <>
+              <EmptyState hasError={hasError} />
+              <ConversationHighlights />
+            </>
+          )}
           
           {!analyzeRepoMutation.isPending && repositoryData && (
             <RepositoryView data={repositoryData} />
