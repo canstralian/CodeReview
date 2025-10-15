@@ -1,0 +1,40 @@
+# Dockerfile for Worker Containers
+
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install dependencies for code analysis tools
+RUN apk add --no-cache \
+    git \
+    python3 \
+    py3-pip \
+    gcc \
+    g++ \
+    make
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production && \
+    npm cache clean --force
+
+# Copy worker code
+COPY server/workers ./server/workers
+COPY server/config ./server/config
+COPY server/queue ./server/queue
+COPY shared ./shared
+
+# Create non-root user
+RUN addgroup -g 1001 -S worker && \
+    adduser -S worker -u 1001
+
+# Change ownership
+RUN chown -R worker:worker /app
+
+# Switch to non-root user
+USER worker
+
+# Start worker
+CMD ["node", "server/workers/workerPool.js"]
