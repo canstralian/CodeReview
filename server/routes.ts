@@ -815,19 +815,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create prompt for Claude
-      const prompt = `Analyze the following ${detectedLanguage} code and provide detailed suggestions for improvement. Focus on:
+      // Create system instructions that can be cached
+      const systemInstructions = `You are an AI assistant tasked with analyzing code and providing detailed suggestions for improvement. Your goal is to provide insightful commentary on code quality, security, performance, and best practices.
 
+Focus on:
 1. Security vulnerabilities and fixes
 2. Performance optimizations
 3. Code quality improvements
 4. Bug detection and fixes
 5. Best practices and refactoring opportunities
-
-Code:
-\`\`\`${detectedLanguage}
-${code}
-\`\`\`
 
 Respond with a JSON object containing an array of suggestions. Each suggestion should have:
 - suggestion: A clear, actionable improvement suggestion
@@ -849,17 +845,35 @@ Example format:
   ]
 }`;
 
-      // Call Claude API
+      // Call Claude API with prompt caching
+      // The system message with cache_control enables prompt caching:
+      // - First call: Creates cache (cache_creation_input_tokens > 0)
+      // - Subsequent calls: Uses cache (cache_read_input_tokens > 0)
+      // This reduces latency and costs by ~90% for cached content
       const response = await anthropic.messages.create({
-        model: "claude-3-sonnet-20240229",
+        model: "claude-3-5-sonnet-20241022",
         max_tokens: 4000,
+        system: [
+          {
+            type: "text",
+            text: systemInstructions,
+          },
+          {
+            type: "text",
+            text: `Language: ${detectedLanguage}`,
+            cache_control: { type: "ephemeral" }
+          }
+        ],
         messages: [
           {
             role: "user",
-            content: prompt
+            content: `Analyze the following ${detectedLanguage} code:\n\n\`\`\`${detectedLanguage}\n${code}\n\`\`\``
           }
         ]
       });
+
+      // Log cache usage statistics
+      console.log("API Usage:", JSON.stringify(response.usage, null, 2));
 
       // Parse Claude's response
       let suggestions = [];
@@ -906,23 +920,23 @@ Example format:
 
     } catch (error) {
       console.error("Error in AI code analysis:", error);
-      
+
       // Provide helpful error messages based on error type
-      if (error.message?.includes('API key')) {
-        return res.status(401).json({ 
+      if (error instanceof Error && error.message?.includes('API key')) {
+        return res.status(401).json({
           message: "AI service authentication failed",
           error: "API_AUTH_FAILED"
         });
       }
-      
-      if (error.message?.includes('rate limit')) {
-        return res.status(429).json({ 
+
+      if (error instanceof Error && error.message?.includes('rate limit')) {
+        return res.status(429).json({
           message: "AI service rate limit exceeded. Please try again later.",
           error: "RATE_LIMIT_EXCEEDED"
         });
       }
 
-      return res.status(500).json({ 
+      return res.status(500).json({
         message: "Internal server error during code analysis",
         error: "INTERNAL_ERROR"
       });
@@ -1126,16 +1140,16 @@ Example format:
 
     } catch (error) {
       console.error("Error in team dashboard:", error);
-      
+
       // Provide helpful error messages
-      if (error.message?.includes('rate limit')) {
+      if (error instanceof Error && error.message?.includes('rate limit')) {
         return res.status(429).json({
           message: "GitHub API rate limit exceeded. Please try again later.",
           error: "RATE_LIMIT_EXCEEDED"
         });
       }
 
-      if (error.message?.includes('Bad credentials')) {
+      if (error instanceof Error && error.message?.includes('Bad credentials')) {
         return res.status(401).json({
           message: "GitHub authentication failed. Please check your token.",
           error: "GITHUB_AUTH_FAILED"
